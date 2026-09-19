@@ -73,6 +73,7 @@ internal sealed class CliText
                   --ins-octave <n>    Move only the instrumental melody (takes precedence over --octave)
                   --bass              Add a bass track playing the chord roots in eighth notes
                   --bass-pattern <p>  Bass rhythm: eighths (default), quarters, root-fifth; implies --bass
+                  --bass-octave <n>   Move the bass by n octaves (-2 to 2); implies --bass
                   --drums             Add a four-on-the-floor drum track with a crash on every section
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
@@ -133,6 +134,7 @@ internal sealed class CliText
                   --ins-octave <n>    Nur die Instrumentalmelodie verschieben (hat Vorrang vor --octave)
                   --bass              Bassspur hinzufügen, spielt die Akkordgrundtöne in Achteln
                   --bass-pattern <p>  Bassrhythmus: eighths (Standard), quarters, root-fifth; schließt --bass ein
+                  --bass-octave <n>   Bass um n Oktaven verschieben (-2 bis 2); schließt --bass ein
                   --drums             Schlagzeugspur (Four on the Floor) mit Crash zu jedem Abschnitt hinzufügen
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt

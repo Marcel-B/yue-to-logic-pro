@@ -1,5 +1,7 @@
 # YuE to Logic
 
+[![CI](https://github.com/Marcel-B/yue-to-logic-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/Marcel-B/yue-to-logic-pro/actions/workflows/ci.yml)
+
 [Deutsche Version](README.de.md)
 
 [YuE](https://github.com/multimodal-art-projection/YuE) generates music with AI. Besides the audio (`audio.flac`), a YuE2 run with chain-of-thought mode `full` or `melody` writes a symbolic version of the song: `score.abc`. That file contains the tempo, meter, key, song structure (verse, chorus, …), a vocal and an instrumental melody, and the chord progression.
@@ -37,6 +39,7 @@ MIDI:        /…/score.mid
 | `--vocal-octave <n>`, `--ins-octave <n>` | Move only one melody; takes precedence over `--octave` |
 | `--bass` | Add a bass track (see below) |
 | `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`; implies `--bass` |
+| `--bass-octave <n>` | Move the bass by `n` octaves (−2 to 2); implies `--bass` |
 | `--drums` | Add a drum track (see below) |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--dump-json <file>` | Also write the parsed score and all diagnostics as JSON; `.json` is appended if missing |
@@ -47,7 +50,7 @@ Exit codes: `0` success, `1` the score could not be converted, `2` invalid argum
 
 ### In Logic Pro
 
-Open the MIDI file via *File → Import → MIDI File* or drag it into a project. Then drag `audio.flac` from the same YuE output folder onto a new audio track at bar 1. Because the MIDI file carries the tempo from the score, both line up.
+Preferably open the MIDI file with *File → Open*: Logic then creates a new project that takes tempo, meter and markers from the file, starting at bar 1. When dragging the file into an existing project instead, drop it exactly at bar 1 and confirm importing the tempo; tempo and meter are placed relative to the drop position, so everything before it keeps the project tempo. Then drag `audio.flac` from the same YuE output folder onto a new audio track at bar 1. Because the MIDI file carries the tempo from the score, both line up.
 
 ## What the MIDI file contains
 
@@ -59,7 +62,7 @@ A Standard MIDI File, type 1:
 | `Vocal` | The vocal melody |
 | `Ins` | The instrumental melody |
 | `Chords` | The chord symbols played as block chords (root in octave 3, slash bass below), plus the symbol as a text event |
-| `Bass` | Only with `--bass`: the bass note of every chord in the register of a bass guitar (E1–D♯2, in Logic's naming E0–D♯1). Slash chords such as `C/E` play their bass note. Notes are slightly detached, on-beat notes a little louder. `root-fifth` alternates quarter notes between bass note and the chord's fifth |
+| `Bass` | Only with `--bass`: the bass note of every chord in the register E2–D♯3 (MIDI 40–51, in Logic's naming E1–D♯2), which every bass instrument can play; `--bass-octave -1` goes down to the lowest bass-guitar string. Slash chords such as `C/E` play their bass note. Notes are slightly detached, on-beat notes a little louder. `root-fifth` alternates quarter notes between bass note and the chord's fifth |
 | `Drums` | Only with `--drums`: kick on every beat, snare on 2 and 4, closed hi-hat in eighth notes (off-beats softer) and a crash cymbal at the start of every section. General MIDI note numbers on channel 10, which Logic's drum kits understand. In 3/4 the snare plays on beat 2; 6/8 is counted in dotted quarters |
 
 The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Bass"` or `"Drums"`.
@@ -80,7 +83,7 @@ samples/score.abc       Official YuE2 example score
 `YueToLogic.Core` has no console or file-system dependencies so that it can later be used from a web service, an Electron/Vue frontend or a macOS app:
 
 - Input is a `string` or `Stream`, output is a `byte[]` or a caller-supplied `Stream`.
-- `services.AddYueToLogic()` registers the stateless `IScoreConverter`, `IAbcScoreParser` and `IMidiRenderer` for dependency injection.
+- `services.AddYueToLogic()` registers the stateless `IScoreConverter`, `IAbcScoreParser`, `IScoreArranger` and `IMidiRenderer` for dependency injection.
 - `ConversionResult` and the `ScoreDocument` model serialize to JSON via the source-generated `YueToLogicJsonContext`, so a frontend can display the score without parsing MIDI.
 - Problems are returned as `Diagnostic` records with stable codes (`YTL0xx`) instead of being logged or thrown.
 

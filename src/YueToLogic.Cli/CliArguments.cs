@@ -25,6 +25,8 @@ internal sealed record CliArguments
 
     public BassPattern? Bass { get; init; }
 
+    public int BassOctave { get; init; }
+
     public bool Drums { get; init; }
 
     public bool Force { get; init; }
@@ -78,16 +80,18 @@ internal sealed record CliArguments
 
                     result = result with { TicksPerQuarterNote = ppq };
                     break;
-                case "--octave" or "--vocal-octave" or "--ins-octave":
+                case "--octave" or "--vocal-octave" or "--ins-octave" or "--bass-octave":
                     if (!TryTakeValue(args, ref i, text, out var octaveText, out error))
                     {
                         return false;
                     }
 
+                    var maxOctaves = arg == "--bass-octave" ? MaxBassOctaves : MaxOctaves;
                     if (!int.TryParse(octaveText, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var octaves)
-                        || octaves is < -MaxOctaves or > MaxOctaves)
+                        || octaves < -maxOctaves
+                        || octaves > maxOctaves)
                     {
-                        error = text.Format(text.InvalidOctave, arg, octaveText, MaxOctaves);
+                        error = text.Format(text.InvalidOctave, arg, octaveText, maxOctaves);
                         return false;
                     }
 
@@ -95,6 +99,7 @@ internal sealed record CliArguments
                     {
                         "--vocal-octave" => result with { VocalOctave = octaves },
                         "--ins-octave" => result with { InsOctave = octaves },
+                        "--bass-octave" => result with { BassOctave = octaves, Bass = result.Bass ?? BassPattern.Eighths },
                         _ => result with { Octave = octaves },
                     };
                     break;
@@ -172,12 +177,13 @@ internal sealed record CliArguments
         {
             DefaultOctaveShift = Octave,
             OctaveShifts = shifts,
-            Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern } : null,
+            Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern, OctaveShift = BassOctave } : null,
             Drums = Drums ? new DrumOptions() : null,
         };
     }
 
     private const int MaxOctaves = 4;
+    private const int MaxBassOctaves = 2;
 
     private static readonly Dictionary<string, BassPattern> BassPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
