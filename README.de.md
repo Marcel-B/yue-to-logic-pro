@@ -41,6 +41,7 @@ MIDI:        /…/score.mid
 | `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`; schließt `--bass` ein |
 | `--bass-octave <n>` | Bass um `n` Oktaven verschieben (−2 bis 2); schließt `--bass` ein |
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
+| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`; schließt `--drums` ein |
 | `--ppq <n>` | MIDI-Auflösung in Ticks pro Viertelnote (Standard 480) |
 | `--logic <audio.flac>` | Zusätzlich ein Logic-Pro-Projekt `<ausgabe>.logicx` mit allen Spuren und diesem Audio schreiben (siehe unten) |
 | `--dump-json <datei>` | Zusätzlich den geparsten Score und alle Meldungen als JSON schreiben; `.json` wird angehängt, wenn es fehlt |
@@ -95,7 +96,7 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
     "defaultOctaveShift": 0,
     "octaveShifts": { "Vocal": -1 },
     "bass": { "pattern": "Eighths", "octaveShift": 0 },
-    "drums": { "crashOnSections": true }
+    "drums": { "pattern": "Backbeat", "crashOnSections": true }
   }
 }
 ```
@@ -108,11 +109,11 @@ Clients, die von einem anderen Origin ausgeliefert werden (z. B. eine Electron-H
 
 ## Logic-Pro-Projekt (experimentell)
 
-Mit der `audio.flac` von YuE (CLI `--logic`, Weboberfläche: zweite Drop-Zone, dann *Logic-Projekt herunterladen*) entsteht ein komplettes Logic-Pro-Projekt: das Audio auf Spur 1 ab Takt 1 und die Spuren Vocal, Ins, Chords, Bass und Drums als MIDI-Regionen, mit Tempo, Taktart und Projektlänge aus dem Score.
+Mit der `audio.flac` von YuE (CLI `--logic`, Weboberfläche: zweite Drop-Zone, dann *Logic-Projekt herunterladen*) entsteht ein komplettes Logic-Pro-Projekt: das Audio auf Spur 1 ab Takt 1, die Spuren Vocal, Ins, Chords, Bass und Drums als MIDI-Regionen, die Abschnitte des Songs als Arrangement-Marker und jeder Akkord auf Logics Akkordspur (der die Session Player folgen können), mit Tempo, Taktart und Projektlänge aus dem Score.
 
-Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus einer von Logic Pro 12.3 gespeicherten Vorlage (`src/YueToLogic.Core/Logic/Template`), in der Noten, Längen, Tempo, Taktart und Audio ersetzt werden; die dort gewählten Instrumente gelten für jedes Projekt. Das Format wurde analysiert und jede Änderung durch Öffnen des Ergebnisses in Logic geprüft. Derzeitige Grenzen: Es wird nur die erste Taktart eines Scores übernommen, Abschnittsmarker und Akkordnamen fehlen im Logic-Projekt noch (sie stehen in der MIDI-Datei), und das Audio muss 48 kHz haben. Eine künftige Logic-Version kann eine neu gespeicherte Vorlage erfordern.
+Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus einer von Logic Pro 12.3 gespeicherten Vorlage (`src/YueToLogic.Core/Logic/Template`), in der Noten, Längen, Tempo, Taktart, Marker, Akkorde und Audio ersetzt werden; Akkordregionen und Markernamen über die der Vorlage hinaus werden als neue Objekte angelegt und so registriert, wie Logic es selbst tut. Die in der Vorlage gewählten Instrumente gelten für jedes Projekt. Das Format wurde analysiert und jede Änderung durch Öffnen, Bearbeiten, Speichern und erneutes Öffnen in Logic geprüft. Grenzen: Es wird nur die erste Taktart eines Scores übernommen, das Audio muss 48 kHz haben, und die Akkordskalen für die Session Player sind ein Standard je Akkordart. Eine künftige Logic-Version kann eine neu gespeicherte Vorlage erfordern.
 
-Für eigene Klänge legst du eine Vorlage genauso an: eine MIDI-Datei dieses Tools in Logic öffnen (*Ablage → Öffnen*), `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln).
+Für eigene Klänge legst du eine Vorlage genauso an: eine MIDI-Datei dieses Tools in Logic öffnen (*Ablage → Öffnen*), `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln).
 
 ## Container und Deployment
 
@@ -154,7 +155,7 @@ Eine Standard-MIDI-Datei vom Typ 1:
 | `Ins` | Die Instrumentalmelodie |
 | `Chords` | Die Akkordsymbole als Blockakkorde (Grundton in Oktave 3, Slash-Bass darunter), zusätzlich das Symbol als Text-Event |
 | `Bass` | Nur mit `--bass`: der Basston jedes Akkords im Register E2–D♯3 (MIDI 40–51, in Logics Benennung E1–D♯2), das jedes Bassinstrument spielen kann; mit `--bass-octave -1` geht es bis zur tiefsten E-Bass-Saite hinunter. Slash-Akkorde wie `C/E` spielen ihren Basston. Die Noten sind leicht gekürzt, Zählzeiten etwas lauter. `root-fifth` wechselt in Vierteln zwischen Basston und Quinte des Akkords |
-| `Drums` | Nur mit `--drums`: Bassdrum auf jedem Schlag, Snare auf 2 und 4, geschlossene Hi-Hat in Achteln (Offbeats leiser) und ein Crash-Becken zu Beginn jedes Abschnitts. General-MIDI-Notennummern auf Kanal 10, die Logics Drumkits verstehen. Im 3/4-Takt spielt die Snare auf 2; 6/8 wird in punktierten Vierteln gezählt |
+| `Drums` | Nur mit `--drums`: *Four on the Floor* spielt die Bassdrum auf jedem Schlag, *Backbeat* auf 1 und 3 mit offener Hi-Hat auf der letzten Achtel (4+). Beide spielen die Snare auf 2 und 4, eine geschlossene Hi-Hat in Achteln (Offbeats leiser) und ein Crash-Becken zu Beginn jedes Abschnitts. General-MIDI-Notennummern auf Kanal 10, die Logics Drumkits verstehen. Im 3/4-Takt spielt die Snare auf 2; 6/8 wird in punktierten Vierteln gezählt |
 
 Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Bass"` bzw. `"Drums"`.
 
@@ -204,6 +205,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-- Abschnittsmarker und Akkordnamen im Logic-Projekt.
 - Logic-Projekte ohne Audio.
 - Taktartwechsel innerhalb eines Songs im Logic-Projekt.
+- Tonart im Logic-Projekt.

@@ -31,7 +31,7 @@ internal sealed record CliArguments
 
     public int BassOctave { get; init; }
 
-    public bool Drums { get; init; }
+    public DrumPattern? Drums { get; init; }
 
     public bool Force { get; init; }
 
@@ -133,7 +133,21 @@ internal sealed record CliArguments
                     result = result with { Bass = pattern };
                     break;
                 case "--drums":
-                    result = result with { Drums = true };
+                    result = result with { Drums = result.Drums ?? DrumPattern.FourOnTheFloor };
+                    break;
+                case "--drum-pattern":
+                    if (!TryTakeValue(args, ref i, text, out var drumText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!DrumPatterns.TryGetValue(drumText, out var drumPattern))
+                    {
+                        error = text.Format(text.InvalidDrumPattern, drumText, string.Join(", ", DrumPatterns.Keys));
+                        return false;
+                    }
+
+                    result = result with { Drums = drumPattern };
                     break;
                 case "--no-chords":
                     result = result with { IncludeChords = false };
@@ -190,7 +204,7 @@ internal sealed record CliArguments
             DefaultOctaveShift = Octave,
             OctaveShifts = shifts,
             Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern, OctaveShift = BassOctave } : null,
-            Drums = Drums ? new DrumOptions() : null,
+            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums } : null,
         };
     }
 
@@ -199,6 +213,12 @@ internal sealed record CliArguments
         ["eighths"] = BassPattern.Eighths,
         ["quarters"] = BassPattern.Quarters,
         ["root-fifth"] = BassPattern.RootFifth,
+    };
+
+    private static readonly Dictionary<string, DrumPattern> DrumPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["four-on-the-floor"] = DrumPattern.FourOnTheFloor,
+        ["backbeat"] = DrumPattern.Backbeat,
     };
 
     private static bool TryTakeValue(string[] args, ref int i, CliText text, out string value, out string? error)

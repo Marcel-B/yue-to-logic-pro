@@ -5,7 +5,7 @@ import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
 import FileDropZone from './components/FileDropZone.vue'
 import { locale, setLocale, t } from './i18n'
-import { loadFormState, saveFormState, toConversionOptions } from './options'
+import { clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
 import type { ConversionResult, Diagnostic } from './types'
 
@@ -74,6 +74,24 @@ async function exportLogic(): Promise<void> {
   }
 }
 
+/** Back to a fresh start: no files, default parameters, no result. The language is kept. */
+function reset(): void {
+  pending?.abort()
+  pending = null
+  busy.value = false
+  file.value = null
+  audio.value = null
+  form.value = defaultFormState()
+  clearFormState()
+  outputName.value = 'score'
+  result.value = null
+  stale.value = false
+  error.value = null
+  logicBusy.value = false
+  logicError.value = null
+  logicWarnings.value = []
+}
+
 async function convert(): Promise<void> {
   if (!file.value) {
     return
@@ -112,9 +130,12 @@ async function convert(): Promise<void> {
       <h1>YuE <span aria-hidden="true">→</span> Logic</h1>
       <p class="muted">{{ t('subtitle') }}</p>
     </div>
-    <div class="locale" role="group" aria-label="Language">
+    <div class="header-actions">
+      <button type="button" class="button secondary small" :title="t('resetTitle')" @click="reset">{{ t('reset') }}</button>
+      <div class="locale" role="group" aria-label="Language">
       <button type="button" :aria-pressed="locale === 'de'" @click="setLocale('de')">DE</button>
       <button type="button" :aria-pressed="locale === 'en'" @click="setLocale('en')">EN</button>
+      </div>
     </div>
   </header>
 
@@ -197,6 +218,17 @@ h1 {
 
 .page-header p {
   margin: 0.25rem 0 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.button.small {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
 }
 
 .locale {

@@ -1,4 +1,4 @@
-import type { BassPattern, ConversionOptions } from './types'
+import type { BassPattern, ConversionOptions, DrumPattern } from './types'
 
 /** The parameter form as the UI edits it; converted to the API's ConversionOptions on submit. */
 export interface FormState {
@@ -9,7 +9,7 @@ export interface FormState {
   insOctave: number | null
   bass: 'off' | BassPattern
   bassOctave: number
-  drums: boolean
+  drums: 'off' | DrumPattern
   crash: boolean
   ppq: number
 }
@@ -21,7 +21,7 @@ export const defaultFormState = (): FormState => ({
   insOctave: null,
   bass: 'off',
   bassOctave: 0,
-  drums: false,
+  drums: 'off',
   crash: true,
   ppq: 480,
 })
@@ -42,7 +42,7 @@ export function toConversionOptions(form: FormState): ConversionOptions {
       defaultOctaveShift: form.octave,
       octaveShifts,
       bass: form.bass === 'off' ? null : { pattern: form.bass, octaveShift: form.bassOctave },
-      drums: form.drums ? { crashOnSections: form.crash } : null,
+      drums: form.drums === 'off' ? null : { pattern: form.drums, crashOnSections: form.crash },
     },
   }
 }
@@ -54,12 +54,26 @@ export function loadFormState(): FormState {
   try {
     const stored = localStorage.getItem(storageKey)
     if (stored) {
-      return { ...defaultFormState(), ...(JSON.parse(stored) as Partial<FormState>) }
+      const state = { ...defaultFormState(), ...(JSON.parse(stored) as Partial<FormState>) }
+      // Settings saved before drum patterns existed stored the drum switch as a boolean.
+      const drums = state.drums as unknown
+      if (typeof drums === 'boolean') {
+        state.drums = drums ? 'FourOnTheFloor' : 'off'
+      }
+      return state
     }
   } catch {
     // Unavailable or corrupt storage: start with the defaults.
   }
   return defaultFormState()
+}
+
+export function clearFormState(): void {
+  try {
+    localStorage.removeItem(storageKey)
+  } catch {
+    // Nothing stored or storage unavailable.
+  }
 }
 
 export function saveFormState(form: FormState): void {
