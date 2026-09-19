@@ -1,6 +1,7 @@
 using System.Globalization;
 using YueToLogic.Core.Abc;
 using YueToLogic.Core.Arrangement;
+using YueToLogic.Core.Conversion;
 
 namespace YueToLogic.Cli;
 
@@ -72,7 +73,7 @@ internal sealed record CliArguments
                         return false;
                     }
 
-                    if (!int.TryParse(ppqText, NumberStyles.None, CultureInfo.InvariantCulture, out var ppq) || ppq is < 24 or > short.MaxValue)
+                    if (!int.TryParse(ppqText, NumberStyles.None, CultureInfo.InvariantCulture, out var ppq) || ppq is < ConversionOptionsValidator.MinTicksPerQuarterNote or > ConversionOptionsValidator.MaxTicksPerQuarterNote)
                     {
                         error = text.Format(text.InvalidPpq, ppqText);
                         return false;
@@ -86,7 +87,7 @@ internal sealed record CliArguments
                         return false;
                     }
 
-                    var maxOctaves = arg == "--bass-octave" ? MaxBassOctaves : MaxOctaves;
+                    var maxOctaves = arg == "--bass-octave" ? ConversionOptionsValidator.MaxBassOctaveShift : ConversionOptionsValidator.MaxOctaveShift;
                     if (!int.TryParse(octaveText, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var octaves)
                         || octaves < -maxOctaves
                         || octaves > maxOctaves)
@@ -181,9 +182,6 @@ internal sealed record CliArguments
             Drums = Drums ? new DrumOptions() : null,
         };
     }
-
-    private const int MaxOctaves = 4;
-    private const int MaxBassOctaves = 2;
 
     private static readonly Dictionary<string, BassPattern> BassPatterns = new(StringComparer.OrdinalIgnoreCase)
     {

@@ -1,0 +1,86 @@
+// Mirrors the JSON contract of YueToLogic.Core (camelCase, enums as strings).
+
+export type Severity = 'Info' | 'Warning' | 'Error'
+
+export interface Diagnostic {
+  severity: Severity
+  code: string
+  message: string
+  line: number | null
+  column: number | null
+}
+
+export interface NoteEvent {
+  startTicks: number
+  durationTicks: number
+  noteNumber: number
+  velocity: number | null
+}
+
+export type TrackKind = 'Melody' | 'Bass' | 'Drums'
+
+export interface VoiceTrack {
+  id: string
+  displayName: string
+  notes: NoteEvent[]
+  kind: TrackKind
+}
+
+export interface TimeSignatureChange {
+  startTicks: number
+  numerator: number
+  denominator: number
+}
+
+export interface KeySignatureChange {
+  startTicks: number
+  key: string
+  sharps: number
+  isMinor: boolean
+}
+
+export interface SectionMarker {
+  startTicks: number
+  name: string
+}
+
+export interface ChordEvent {
+  startTicks: number
+  durationTicks: number
+  text: string
+  symbol: { rootPitchClass: number; quality: string; bassPitchClass: number | null } | null
+}
+
+export interface ScoreDocument {
+  ticksPerQuarterNote: number
+  title: string | null
+  tempoBpm: number
+  timeSignatures: TimeSignatureChange[]
+  keySignatures: KeySignatureChange[]
+  sections: SectionMarker[]
+  voices: VoiceTrack[]
+  chords: ChordEvent[]
+  lengthTicks: number
+  durationSeconds: number
+}
+
+export interface ConversionResult {
+  success: boolean
+  score: ScoreDocument | null
+  /** Standard MIDI File, base64-encoded. */
+  midi: string | null
+  diagnostics: Diagnostic[]
+}
+
+export type BassPattern = 'Eighths' | 'Quarters' | 'RootFifth'
+
+export interface ConversionOptions {
+  ticksPerQuarterNote: number
+  includeChordTrack: boolean
+  arrangement: {
+    defaultOctaveShift: number
+    octaveShifts: Record<string, number>
+    bass: { pattern: BassPattern; octaveShift: number } | null
+    drums: { crashOnSections: boolean } | null
+  }
+}

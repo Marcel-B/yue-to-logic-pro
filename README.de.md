@@ -8,7 +8,7 @@ Mit [YuE](https://github.com/multimodal-art-projection/YuE) lässt sich Musik pe
 
 Langfristiges Ziel dieses Projekts ist ein Logic-Pro-Projekt, in dem das generierte Audio als Region liegt und darunter passende MIDI-Spuren. Es soll eine Grundlage zum Analysieren, Bearbeiten oder Erweitern eines Songs sein, keine perfekte Transkription.
 
-**Aktueller Stand:** ein Prototyp, der `score.abc` in eine MIDI-Datei umwandelt, die sich in Logic Pro öffnen lässt.
+**Aktueller Stand:** wandelt `score.abc` in eine MIDI-Datei für Logic Pro um, per Kommandozeile oder über eine Weboberfläche.
 
 ## Verwendung
 
@@ -52,6 +52,58 @@ Exit-Codes: `0` Erfolg, `1` Score nicht konvertierbar, `2` ungültige Argumente 
 
 Die MIDI-Datei am besten über *Ablage → Öffnen* öffnen: Logic legt dann ein neues Projekt an, das Tempo, Taktart und Marker ab Takt 1 aus der Datei übernimmt. Zieht man die Datei stattdessen in ein bestehendes Projekt, genau auf Takt 1 ablegen und die Tempo-Übernahme bestätigen; Tempo und Taktart werden relativ zur Ablageposition eingefügt, davor gilt weiter das Projekttempo. Anschließend `audio.flac` aus demselben YuE-Ausgabeordner auf eine neue Audiospur bei Takt 1 ziehen. Da die MIDI-Datei das Tempo aus dem Score mitbringt, laufen beide synchron.
 
+## Weboberfläche
+
+Im Vue-Frontend zieht man eine `score.abc` hinein (oder wählt sie über den Dateidialog), stellt dieselben Parameter wie in der CLI ein und lädt MIDI-Datei und JSON-Dump herunter. Außerdem zeigt es Tempo, Taktart, Tonart, Länge, die Abschnitte des Songs und alle Meldungen.
+
+Das Frontend liegt in `src/YueToLogic.Api/ClientApp` und wird von der API unter `/ui` ausgeliefert (`/` leitet dorthin weiter). Zusätzlich zu .NET wird Node.js ab 22.12 benötigt.
+
+**Entwicklung:** Ein Befehl startet alles:
+
+```sh
+dotnet run --project src/YueToLogic.Api
+```
+
+Der erste Build installiert die npm-Pakete. Beim Start lässt [SpaProxy](https://learn.microsoft.com/aspnet/core/client-side/spa/intro) den Vite-Dev-Server (`npm run dev`) starten, und der Browser öffnet <http://localhost:5080>, das an Vite unter <http://127.0.0.1:5173/ui/> weiterleitet. Änderungen am Vue-Code erscheinen sofort; Vite leitet `/api` an die API zurück.
+
+**Auslieferung:** `dotnet publish` baut das Frontend (`npm ci`, `npm run build`) und legt es als `wwwroot/ui` ab:
+
+```sh
+dotnet publish src/YueToLogic.Api -c Release -o publish
+dotnet publish/YueToLogic.Api.dll --urls http://localhost:5080
+```
+
+Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipClientAppBuild=true` übergeben und `ClientApp/dist` nach `wwwroot/ui` kopieren.
+
+### HTTP-API
+
+| Endpunkt | Anfrage | Antwort |
+|---|---|---|
+| `POST /api/convert` | Multipart-Formular: `file` (der Score), optional `options` (JSON, siehe unten) | `200` mit Score, Meldungen und `midi` (Base64) als JSON; `422` mit Meldungen, wenn Score oder Optionen unbrauchbar sind; `400` bei fehlender Datei oder fehlerhaften Optionen |
+| `POST /api/convert/midi` | wie oben | die MIDI-Datei (`audio/midi`) |
+| `GET /api/health` | – | `ok` |
+
+`options` ist die JSON-Form von `ConversionOptions`; jedes Feld ist optional:
+
+```json
+{
+  "ticksPerQuarterNote": 480,
+  "includeChordTrack": true,
+  "arrangement": {
+    "defaultOctaveShift": 0,
+    "octaveShifts": { "Vocal": -1 },
+    "bass": { "pattern": "Eighths", "octaveShift": 0 },
+    "drums": { "crashOnSections": true }
+  }
+}
+```
+
+```sh
+curl -F file=@score.abc -F 'options={"arrangement":{"drums":{}}}' http://localhost:5080/api/convert/midi -o score.mid
+```
+
+Clients, die von einem anderen Origin ausgeliefert werden (z. B. eine Electron-Hülle), müssen in `appsettings.json` unter `Cors:AllowedOrigins` eingetragen werden. Die OpenAPI-Beschreibung liegt unter `/api/openapi`.
+
 ## Inhalt der MIDI-Datei
 
 Eine Standard-MIDI-Datei vom Typ 1:
@@ -76,6 +128,8 @@ YuE2 schreibt eine bewusst kleine Teilmenge der ABC-Notation. Ein allgemeiner AB
 ```
 src/YueToLogic.Core/    Bibliothek: ABC-Parser, Score-Modell, MIDI-Erzeugung
 src/YueToLogic.Cli/     Kommandozeilenwerkzeug (yue2logic)
+src/YueToLogic.Api/     ASP.NET-Core-API; liefert das Web-Frontend unter /ui aus
+  ClientApp/            Vue-3-Frontend mit Vite und TypeScript
 tests/                  xUnit-Tests
 samples/score.abc       Offizielles YuE2-Beispiel
 ```
@@ -83,6 +137,7 @@ samples/score.abc       Offizielles YuE2-Beispiel
 `YueToLogic.Core` hat keine Abhängigkeiten zu Konsole oder Dateisystem, damit die Bibliothek später aus einem Webservice, einem Electron/Vue-Frontend oder einer macOS-App genutzt werden kann:
 
 - Eingabe ist ein `string` oder `Stream`, Ausgabe ein `byte[]` oder ein vom Aufrufer gestellter `Stream`.
+- Die Wertebereiche der Optionen prüft `ConversionOptionsValidator`, damit jede Anwendung dieselben Werte akzeptiert.
 - `services.AddYueToLogic()` registriert die zustandslosen Dienste `IScoreConverter`, `IAbcScoreParser`, `IScoreArranger` und `IMidiRenderer` für Dependency Injection.
 - `ConversionResult` und das Modell `ScoreDocument` lassen sich über den quellgenerierten `YueToLogicJsonContext` als JSON serialisieren, sodass ein Frontend den Score anzeigen kann, ohne MIDI zu parsen.
 - Probleme werden als `Diagnostic`-Datensätze mit stabilen Codes (`YTL0xx`) zurückgegeben, nicht geloggt oder als Exception geworfen.
@@ -100,7 +155,10 @@ if (result.Success)
 ```sh
 dotnet build
 dotnet test
+dotnet publish src/YueToLogic.Api -c Release -o publish   # inkl. Typprüfung und Bündelung des Frontends
 ```
+
+Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei jedem Push und Pull Request aus.
 
 ## Nächste Schritte
 
