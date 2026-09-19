@@ -41,6 +41,7 @@ MIDI:        /…/score.mid
 | `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`; implies `--bass` |
 | `--bass-octave <n>` | Move the bass by `n` octaves (−2 to 2); implies `--bass` |
 | `--drums` | Add a drum track (see below) |
+| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`; implies `--drums` |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
 | `--dump-json <file>` | Also write the parsed score and all diagnostics as JSON; `.json` is appended if missing |
@@ -95,7 +96,7 @@ If the frontend is built separately, for example in its own Docker stage, pass `
     "defaultOctaveShift": 0,
     "octaveShifts": { "Vocal": -1 },
     "bass": { "pattern": "Eighths", "octaveShift": 0 },
-    "drums": { "crashOnSections": true }
+    "drums": { "pattern": "Backbeat", "crashOnSections": true }
   }
 }
 ```
@@ -108,11 +109,11 @@ Clients served from another origin (for example an Electron shell) must be liste
 
 ## Logic Pro project (experimental)
 
-With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1 and the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, with tempo, meter and project length taken from the score.
+With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1, the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, the song sections as arrangement markers and every chord on Logic's chord track (which Session Players can follow), with tempo, meter and project length taken from the score.
 
-Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter and audio are replaced; the instruments chosen in that template are used for every project. The format was analysed and every change verified by opening the result in Logic. Limitations for now: only the first meter of a score is used, section markers and chord names are not yet in the Logic project (they are in the MIDI file), and the audio must be 48 kHz. A future Logic version may need a newly saved template.
+Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter, markers, chords and audio are replaced; chord regions and marker names beyond the template's are added as new objects, registered the way Logic does it. The instruments chosen in that template are used for every project. The format was analysed and every change verified by opening, editing, saving and reopening the result in Logic. Limitations: only the first meter of a score is used, the audio must be 48 kHz, and the chord scales offered to Session Players are a default per chord type. A future Logic version may need a newly saved template.
 
-To use your own sounds, create a template the same way: open a MIDI file from this tool in Logic (*File → Open*), drag `audio.flac` onto a new audio track at bar 1, choose instruments, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`).
+To use your own sounds, create a template the same way: open a MIDI file from this tool in Logic (*File → Open*), drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`).
 
 ## Container and deployment
 
@@ -154,7 +155,7 @@ A Standard MIDI File, type 1:
 | `Ins` | The instrumental melody |
 | `Chords` | The chord symbols played as block chords (root in octave 3, slash bass below), plus the symbol as a text event |
 | `Bass` | Only with `--bass`: the bass note of every chord in the register E2–D♯3 (MIDI 40–51, in Logic's naming E1–D♯2), which every bass instrument can play; `--bass-octave -1` goes down to the lowest bass-guitar string. Slash chords such as `C/E` play their bass note. Notes are slightly detached, on-beat notes a little louder. `root-fifth` alternates quarter notes between bass note and the chord's fifth |
-| `Drums` | Only with `--drums`: kick on every beat, snare on 2 and 4, closed hi-hat in eighth notes (off-beats softer) and a crash cymbal at the start of every section. General MIDI note numbers on channel 10, which Logic's drum kits understand. In 3/4 the snare plays on beat 2; 6/8 is counted in dotted quarters |
+| `Drums` | Only with `--drums`: *four on the floor* plays the kick on every beat, *backbeat* on 1 and 3 with an open hi-hat on the last eighth (4+). Both play the snare on 2 and 4, a closed hi-hat in eighth notes (off-beats softer) and a crash cymbal at the start of every section. General MIDI note numbers on channel 10, which Logic's drum kits understand. In 3/4 the snare plays on beat 2; 6/8 is counted in dotted quarters |
 
 The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Bass"` or `"Drums"`.
 
@@ -204,6 +205,6 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- Section markers and chord names in the Logic project.
 - Logic projects without audio.
 - Meter changes within a song in the Logic project.
+- Key signature in the Logic project.

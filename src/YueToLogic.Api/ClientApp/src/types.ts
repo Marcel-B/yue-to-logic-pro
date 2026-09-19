@@ -74,6 +74,8 @@ export interface ConversionResult {
 
 export type BassPattern = 'Eighths' | 'Quarters' | 'RootFifth'
 
+export type DrumPattern = 'FourOnTheFloor' | 'Backbeat'
+
 export interface ConversionOptions {
   ticksPerQuarterNote: number
   includeChordTrack: boolean
@@ -81,6 +83,6 @@ export interface ConversionOptions {
     defaultOctaveShift: number
     octaveShifts: Record<string, number>
     bass: { pattern: BassPattern; octaveShift: number } | null
-    drums: { crashOnSections: boolean } | null
+    drums: { pattern: DrumPattern; crashOnSections: boolean } | null
   }
 }

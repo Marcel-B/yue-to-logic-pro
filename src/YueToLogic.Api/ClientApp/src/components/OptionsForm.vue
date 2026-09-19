@@ -71,12 +71,16 @@ function signed(value: number): string {
 
     <fieldset>
       <legend>{{ t('drums') }}</legend>
-      <label class="check">
-        <input v-model="form.drums" type="checkbox" />
-        {{ t('drumsOn') }}
+      <label class="select-full">
+        <span class="sr-only">{{ t('drums') }}</span>
+        <select v-model="form.drums">
+          <option value="off">{{ t('drumsOff') }}</option>
+          <option value="FourOnTheFloor">{{ t('drumsOn') }}</option>
+          <option value="Backbeat">{{ t('drumsBackbeat') }}</option>
+        </select>
       </label>
-      <label class="check" :class="{ disabled: !form.drums }">
-        <input v-model="form.crash" type="checkbox" :disabled="!form.drums" />
+      <label class="check" :class="{ disabled: form.drums === 'off' }">
+        <input v-model="form.crash" type="checkbox" :disabled="form.drums === 'off'" />
         {{ t('crash') }}
       </label>
     </fieldset>
@@ -128,6 +132,10 @@ legend {
 
 .row .grow {
   flex: 1 1 14rem;
+}
+
+.select-full select {
+  width: 100%;
 }
 
 .check {
