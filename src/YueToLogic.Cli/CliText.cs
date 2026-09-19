@@ -37,6 +37,9 @@ internal sealed class CliText
     public required string LabelTracks { get; init; }
     public required string LabelMidi { get; init; }
     public required string LabelJson { get; init; }
+    public required string LabelLogic { get; init; }
+    public required string AudioNotFound { get; init; }
+    public required string LogicFailed { get; init; }
     public required string LengthValue { get; init; }
     public required string SectionValue { get; init; }
     public required string NotesValue { get; init; }
@@ -77,6 +80,7 @@ internal sealed class CliText
                   --drums             Add a four-on-the-floor drum track with a crash on every section
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
+                  --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
               -f, --force             Overwrite existing output files
               -v, --verbose           Also show informational messages
               -h, --help              Show this help
@@ -110,6 +114,9 @@ internal sealed class CliText
         LabelTracks = "Tracks",
         LabelMidi = "MIDI",
         LabelJson = "JSON",
+        LabelLogic = "Logic",
+        AudioNotFound = "Audio file not found: {0}",
+        LogicFailed = "The Logic project could not be written.",
         LengthValue = "{0} bars, {1:0.0} s",
         SectionValue = "{0} (bar {1})",
         NotesValue = "{0}: {1} notes",
@@ -138,6 +145,7 @@ internal sealed class CliText
                   --drums             Schlagzeugspur (Four on the Floor) mit Crash zu jedem Abschnitt hinzufügen
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
+                  --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
               -f, --force             Vorhandene Ausgabedateien überschreiben
               -v, --verbose           Auch Info-Meldungen anzeigen
               -h, --help              Diese Hilfe anzeigen
@@ -171,6 +179,9 @@ internal sealed class CliText
         LabelTracks = "Spuren",
         LabelMidi = "MIDI",
         LabelJson = "JSON",
+        LabelLogic = "Logic",
+        AudioNotFound = "Audiodatei nicht gefunden: {0}",
+        LogicFailed = "Das Logic-Projekt konnte nicht geschrieben werden.",
         LengthValue = "{0} Takte, {1:0.0} s",
         SectionValue = "{0} (Takt {1})",
         NotesValue = "{0}: {1} Noten",

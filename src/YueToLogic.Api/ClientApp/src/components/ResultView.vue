@@ -4,7 +4,16 @@ import { formatDuration, formatNumber, t, type MessageKey } from '../i18n'
 import { barAt, barCount, download, jsonBlob, midiBlob } from '../score'
 import type { ConversionResult, Diagnostic, ScoreDocument } from '../types'
 
-const props = defineProps<{ result: ConversionResult; outputName: string; stale: boolean }>()
+const props = defineProps<{
+  result: ConversionResult
+  outputName: string
+  stale: boolean
+  hasAudio: boolean
+  logicBusy: boolean
+  logicError: string | null
+  logicWarnings: Diagnostic[]
+}>()
+const emit = defineEmits<{ exportLogic: [] }>()
 
 const showInfos = ref(false)
 
@@ -119,6 +128,27 @@ function downloadJson(): void {
           {{ t('downloadMidi') }}
         </button>
         <button type="button" class="button secondary" @click="downloadJson">{{ t('downloadJson') }}</button>
+        <button
+          type="button"
+          class="button secondary"
+          :disabled="!hasAudio || logicBusy"
+          :title="hasAudio ? t('logicHint') : t('logicNeedsAudio')"
+          @click="emit('exportLogic')"
+        >
+          {{ logicBusy ? t('buildingLogic') : t('downloadLogic') }}
+        </button>
+      </div>
+      <p class="hint muted">{{ hasAudio ? t('logicHint') : t('logicNeedsAudio') }}</p>
+      <p v-if="logicError" class="hint danger" role="alert">{{ logicError }}</p>
+      <div v-if="logicWarnings.length" class="logic-warnings">
+        <h3>{{ t('logicWarnings') }}</h3>
+        <ul class="diagnostics">
+          <li v-for="(diagnostic, index) in logicWarnings" :key="index" :class="diagnostic.severity.toLowerCase()">
+            <span class="badge">{{ severityLabel(diagnostic) }}</span>
+            <span class="code">{{ diagnostic.code }}</span>
+            <span class="message">{{ diagnostic.message }}</span>
+          </li>
+        </ul>
       </div>
     </template>
 

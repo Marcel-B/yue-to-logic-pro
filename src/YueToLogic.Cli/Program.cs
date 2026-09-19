@@ -2,6 +2,7 @@ using System.Text.Json;
 using YueToLogic.Cli;
 using YueToLogic.Core.Conversion;
 using YueToLogic.Core.Diagnostics;
+using YueToLogic.Core.Logic;
 using YueToLogic.Core.Model;
 using YueToLogic.Core.Serialization;
 
@@ -30,6 +31,8 @@ var midiPath = Path.GetFullPath(options.OutputPath is null
     ? Path.ChangeExtension(inputPath, ".mid")
     : EnsureExtension(options.OutputPath, ".mid", ".midi"));
 var jsonPath = options.JsonPath is null ? null : Path.GetFullPath(EnsureExtension(options.JsonPath, ".json"));
+var logicAudioPath = options.LogicAudioPath is null ? null : Path.GetFullPath(options.LogicAudioPath);
+var logicPath = logicAudioPath is null ? null : Path.ChangeExtension(midiPath, ".logicx");
 
 if (!File.Exists(inputPath))
 {
@@ -37,9 +40,15 @@ if (!File.Exists(inputPath))
     return ExitUsageOrIoError;
 }
 
-foreach (var path in new[] { midiPath, jsonPath })
+if (logicAudioPath is not null && !File.Exists(logicAudioPath))
 {
-    if (path is not null && File.Exists(path) && !options.Force)
+    Console.Error.WriteLine(text.Format(text.AudioNotFound, logicAudioPath));
+    return ExitUsageOrIoError;
+}
+
+foreach (var path in new[] { midiPath, jsonPath, logicPath })
+{
+    if (path is not null && (File.Exists(path) || Directory.Exists(path)) && !options.Force)
     {
         Console.Error.WriteLine(text.Format(text.OutputExists, path));
         return ExitUsageOrIoError;
@@ -87,8 +96,43 @@ if (!await TryWriteAsync(midiPath, () => File.WriteAllBytesAsync(midiPath, resul
     return ExitUsageOrIoError;
 }
 
+if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, logicAudioPath!, logicPath))
+{
+    return ExitConversionFailed;
+}
+
 PrintSummary(result.Score!);
 return ExitSuccess;
+
+async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string audioPath, string packagePath)
+{
+    try
+    {
+        if (Directory.Exists(packagePath))
+        {
+            Directory.Delete(packagePath, recursive: true); // only reached with --force
+        }
+
+        await using var audio = File.OpenRead(audioPath);
+        var logic = await new LogicProjectWriter().WriteAsync(
+            score,
+            audio,
+            new DirectoryLogicPackageSink(packagePath),
+            new LogicProjectOptions { ProjectName = Path.GetFileNameWithoutExtension(packagePath) });
+        PrintDiagnostics(logic.Diagnostics);
+        if (!logic.Success)
+        {
+            Console.Error.WriteLine(text.LogicFailed);
+        }
+
+        return logic.Success;
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine(text.Format(text.WriteFailed, packagePath, ex.Message));
+        return false;
+    }
+}
 
 async Task<bool> TryWriteAsync(string path, Func<Task> write)
 {
@@ -153,6 +197,11 @@ void PrintSummary(ScoreDocument score)
     if (jsonPath is not null)
     {
         WriteRow(text.LabelJson, jsonPath);
+    }
+
+    if (logicPath is not null)
+    {
+        WriteRow(text.LabelLogic, logicPath);
     }
 }
 

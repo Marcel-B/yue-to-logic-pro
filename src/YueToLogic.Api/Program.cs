@@ -16,7 +16,8 @@ builder.Services.AddOpenApi();
 // under Cors:AllowedOrigins. The bundled web frontend is served by this app itself and needs no entry.
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
-    policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST")));
+    policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST")
+        .WithExposedHeaders(ConvertEndpoints.DiagnosticsHeader, "Content-Disposition")));
 
 var app = builder.Build();
 

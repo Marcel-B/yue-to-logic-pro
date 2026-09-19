@@ -13,6 +13,9 @@ internal sealed record CliArguments
 
     public string? JsonPath { get; init; }
 
+    /// <summary>YuE audio.flac; when set, a Logic Pro project is written next to the MIDI file.</summary>
+    public string? LogicAudioPath { get; init; }
+
     public bool IncludeChords { get; init; } = true;
 
     public int TicksPerQuarterNote { get; init; } = AbcParseOptions.DefaultTicksPerQuarterNote;
@@ -66,6 +69,14 @@ internal sealed record CliArguments
                     }
 
                     result = result with { JsonPath = json };
+                    break;
+                case "--logic":
+                    if (!TryTakeValue(args, ref i, text, out var audio, out error))
+                    {
+                        return false;
+                    }
+
+                    result = result with { LogicAudioPath = audio };
                     break;
                 case "--ppq":
                     if (!TryTakeValue(args, ref i, text, out var ppqText, out error))

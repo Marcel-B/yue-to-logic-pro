@@ -8,7 +8,7 @@ Mit [YuE](https://github.com/multimodal-art-projection/YuE) lässt sich Musik pe
 
 Langfristiges Ziel dieses Projekts ist ein Logic-Pro-Projekt, in dem das generierte Audio als Region liegt und darunter passende MIDI-Spuren. Es soll eine Grundlage zum Analysieren, Bearbeiten oder Erweitern eines Songs sein, keine perfekte Transkription.
 
-**Aktueller Stand:** wandelt `score.abc` in eine MIDI-Datei für Logic Pro um, per Kommandozeile oder über eine Weboberfläche.
+**Aktueller Stand:** wandelt `score.abc` in eine MIDI-Datei und zusammen mit dem YuE-Audio in ein Logic-Pro-Projekt um, per Kommandozeile oder über eine Weboberfläche.
 
 ## Verwendung
 
@@ -42,6 +42,7 @@ MIDI:        /…/score.mid
 | `--bass-octave <n>` | Bass um `n` Oktaven verschieben (−2 bis 2); schließt `--bass` ein |
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
 | `--ppq <n>` | MIDI-Auflösung in Ticks pro Viertelnote (Standard 480) |
+| `--logic <audio.flac>` | Zusätzlich ein Logic-Pro-Projekt `<ausgabe>.logicx` mit allen Spuren und diesem Audio schreiben (siehe unten) |
 | `--dump-json <datei>` | Zusätzlich den geparsten Score und alle Meldungen als JSON schreiben; `.json` wird angehängt, wenn es fehlt |
 | `-f, --force` | Vorhandene Ausgabedateien überschreiben |
 | `-v, --verbose` | Auch Info-Meldungen anzeigen |
@@ -81,6 +82,7 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
 |---|---|---|
 | `POST /api/convert` | Multipart-Formular: `file` (der Score), optional `options` (JSON, siehe unten) | `200` mit Score, Meldungen und `midi` (Base64) als JSON; `422` mit Meldungen, wenn Score oder Optionen unbrauchbar sind; `400` bei fehlender Datei oder fehlerhaften Optionen |
 | `POST /api/convert/midi` | wie oben | die MIDI-Datei (`audio/midi`) |
+| `POST /api/convert/logic` | wie oben, zusätzlich `audio` (die `audio.flac`, bis 250 MB) und optional `name` | ein ZIP mit `<name>.logicx`; Hinweise im Header `X-YueToLogic-Diagnostics`; `422`, wenn das Audio kein FLAC mit 48 kHz ist |
 | `GET /api/health` | – | `ok` |
 
 `options` ist die JSON-Form von `ConversionOptions`; jedes Feld ist optional:
@@ -104,6 +106,14 @@ curl -F file=@score.abc -F 'options={"arrangement":{"drums":{}}}' http://localho
 
 Clients, die von einem anderen Origin ausgeliefert werden (z. B. eine Electron-Hülle), müssen in `appsettings.json` unter `Cors:AllowedOrigins` eingetragen werden. Die OpenAPI-Beschreibung liegt unter `/api/openapi`.
 
+## Logic-Pro-Projekt (experimentell)
+
+Mit der `audio.flac` von YuE (CLI `--logic`, Weboberfläche: zweite Drop-Zone, dann *Logic-Projekt herunterladen*) entsteht ein komplettes Logic-Pro-Projekt: das Audio auf Spur 1 ab Takt 1 und die Spuren Vocal, Ins, Chords, Bass und Drums als MIDI-Regionen, mit Tempo, Taktart und Projektlänge aus dem Score.
+
+Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus einer von Logic Pro 12.3 gespeicherten Vorlage (`src/YueToLogic.Core/Logic/Template`), in der Noten, Längen, Tempo, Taktart und Audio ersetzt werden; die dort gewählten Instrumente gelten für jedes Projekt. Das Format wurde analysiert und jede Änderung durch Öffnen des Ergebnisses in Logic geprüft. Derzeitige Grenzen: Es wird nur die erste Taktart eines Scores übernommen, Abschnittsmarker und Akkordnamen fehlen im Logic-Projekt noch (sie stehen in der MIDI-Datei), und das Audio muss 48 kHz haben. Eine künftige Logic-Version kann eine neu gespeicherte Vorlage erfordern.
+
+Für eigene Klänge legst du eine Vorlage genauso an: eine MIDI-Datei dieses Tools in Logic öffnen (*Ablage → Öffnen*), `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln).
+
 ## Container und Deployment
 
 Die CI baut ein Container-Image mit API und Weboberfläche und pusht es in die GitHub Container Registry, sobald Tests und Publish grün sind:
@@ -124,7 +134,7 @@ Das Image lauscht auf Port 8080, läuft als unprivilegierter Benutzer und speich
 4. **Nginx Proxy Manager:** *Hosts → Proxy Hosts → Add Proxy Host*
    - *Details:* Domain Names `music.idsrv.info`, Scheme `http`, Forward Hostname/IP = IP des Containers, Forward Port `8080`, *Block Common Exploits* an.
    - *SSL:* Zertifikat auswählen oder anfordern (für einen nur privat erreichbaren Host braucht Let's Encrypt die DNS-Challenge, alternativ ein vorhandenes `*.idsrv.info`-Wildcard-Zertifikat); *Force SSL* und *HTTP/2 Support* aktivieren.
-   - Mehr ist nicht nötig: NPM setzt die `X-Forwarded-*`-Header selbst, und sein Upload-Limit liegt weit über den maximal 1 MB eines Scores.
+   - NPM setzt die `X-Forwarded-*`-Header selbst. Für den Logic-Export müssen Audio-Uploads von 45–100 MB durchgehen: Antwortet NPM mit `413 Request Entity Too Large`, unter *Advanced* `client_max_body_size 300m;` eintragen.
 5. **AdGuard Home:** unter *Filter → DNS-Umschreibungen* `music.idsrv.info` → IP des **Nginx-Proxy-Manager**-Hosts eintragen (nicht die des App-Containers).
 6. Sobald <https://music.idsrv.info> funktioniert, in `.env` auf `ALLOWED_HOSTS=music.idsrv.info;localhost` einschränken und `docker compose up -d` erneut ausführen.
 7. **Aktualisieren:** `docker compose pull && docker compose up -d`.
@@ -157,6 +167,7 @@ YuE2 schreibt eine bewusst kleine Teilmenge der ABC-Notation. Ein allgemeiner AB
 ```
 src/YueToLogic.Core/    Bibliothek: ABC-Parser, Score-Modell, MIDI-Erzeugung
 src/YueToLogic.Cli/     Kommandozeilenwerkzeug (yue2logic)
+  Logic/                Logic-Pro-Projekt-Writer und eingebettete Vorlage
 src/YueToLogic.Api/     ASP.NET-Core-API; liefert das Web-Frontend unter /ui aus
   ClientApp/            Vue-3-Frontend mit Vite und TypeScript
 deploy/                 Docker-Compose-Setup für den Server
@@ -193,4 +204,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-Ein vollständiges `.logicx`-Projekt erzeugen. Logics Projektformat ist ein undokumentiertes Binärpaket; der wahrscheinliche nächste Schritt ist daher ein Ausgabeordner mit MIDI-Datei und kopiertem Audio, den man in Logic in einem Rutsch importiert.
+- Abschnittsmarker und Akkordnamen im Logic-Projekt.
+- Logic-Projekte ohne Audio.
+- Taktartwechsel innerhalb eines Songs im Logic-Projekt.
