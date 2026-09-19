@@ -12,12 +12,15 @@ public static class ClientAppEndpoints
 {
     public const string BasePath = "/ui";
 
+    /// <summary>Browsers use GET; uptime monitors and link checkers often use HEAD. Kestrel omits the body for HEAD.</summary>
+    public static readonly string[] GetAndHead = [HttpMethods.Get, HttpMethods.Head];
+
     public static WebApplication MapClientApp(this WebApplication app)
     {
-        app.MapGet("/", () => Results.Redirect($"{BasePath}/")).ExcludeFromDescription();
+        app.MapMethods("/", GetAndHead, () => Results.Redirect($"{BasePath}/")).ExcludeFromDescription();
         // "nonfile" leaves paths with a file extension to the static-file middleware, which skips any request
         // that already matched an endpoint. A missing asset thus becomes a 404 instead of the app shell.
-        app.MapGet($"{BasePath}/{{**path:nonfile}}", ServeIndex).ExcludeFromDescription();
+        app.MapMethods($"{BasePath}/{{**path:nonfile}}", GetAndHead, ServeIndex).ExcludeFromDescription();
         return app;
     }
 

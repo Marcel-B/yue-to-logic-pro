@@ -31,7 +31,8 @@ app.UseStaticFiles();
 app.MapOpenApi("/api/openapi");
 
 var api = app.MapGroup("/api");
-api.MapGet("/health", () => Results.Text("ok"));
+// HEAD as well, since uptime monitors often probe with it.
+api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
 api.MapConvertEndpoints();
 
 app.MapClientApp();
