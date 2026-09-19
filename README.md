@@ -104,6 +104,30 @@ curl -F file=@score.abc -F 'options={"arrangement":{"drums":{}}}' http://localho
 
 Clients served from another origin (for example an Electron shell) must be listed in `Cors:AllowedOrigins` in `appsettings.json`. The OpenAPI description is available at `/api/openapi`.
 
+## Container and deployment
+
+CI builds a container image with API and web interface and pushes it to the GitHub Container Registry once tests and publish have passed:
+
+| Tag | Meaning |
+|---|---|
+| `ghcr.io/marcel-b/yue-to-logic-pro:latest` | newest commit on `main` |
+| `…:sha-3f2c1ab` | a specific commit |
+| `…:1.2.0`, `…:1.2` | a release, created by pushing a tag: `git tag v1.2.0 && git push origin v1.2.0` |
+
+The image listens on port 8080, runs as an unprivileged user and keeps no state. To try it locally: `docker build -t yue-to-logic . && docker run --rm -p 8080:8080 yue-to-logic`, then open <http://localhost:8080>.
+
+### Proxmox container with Docker Compose
+
+1. **Container:** a Debian LXC container. For Docker inside an unprivileged container, enable *Options → Features → nesting* and *keyctl*. Install Docker Engine with the Compose plugin as described at <https://docs.docker.com/engine/install/debian/>.
+2. **Files:** copy [`deploy/compose.yml`](deploy/compose.yml) and [`deploy/.env.example`](deploy/.env.example) to e.g. `/opt/yue-to-logic/`, rename `.env.example` to `.env` and adjust it.
+3. **Start:** `docker compose pull && docker compose up -d`, check with `curl http://localhost:8080/api/health` (answers `ok`).
+4. **nginx:** copy [`deploy/nginx/music.idsrv.info.conf`](deploy/nginx/music.idsrv.info.conf) to the nginx host, set the container's IP in the `upstream` block, enable it and run `nginx -t && systemctl reload nginx`. The file also contains an HTTPS variant for a certificate for `music.idsrv.info` or `*.idsrv.info`. If nginx runs in the same container, set `HTTP_BIND=127.0.0.1` in `.env` so port 8080 is not reachable from the network.
+5. **AdGuard Home:** under *Filters → DNS rewrites* add `music.idsrv.info` → IP of the **nginx** host (not of the app container).
+6. Once <http://music.idsrv.info> works, set `ALLOWED_HOSTS=music.idsrv.info;localhost` in `.env` and run `docker compose up -d` again.
+7. **Update:** `docker compose pull && docker compose up -d`.
+
+The container runs with a read-only file system, without Linux capabilities and with `no-new-privileges`. GitHub may create the image package as *private* on first push even though the repository is public: either set it to public once under *Packages → yue-to-logic-pro → Package settings*, or run `docker login ghcr.io` on the host with a token that has `read:packages`.
+
 ## What the MIDI file contains
 
 A Standard MIDI File, type 1:
@@ -130,6 +154,8 @@ src/YueToLogic.Core/    Library: ABC parsing, score model, MIDI rendering
 src/YueToLogic.Cli/     Command-line tool (yue2logic)
 src/YueToLogic.Api/     ASP.NET Core API; serves the web frontend under /ui
   ClientApp/            Vue 3 + Vite + TypeScript frontend
+deploy/                 Docker Compose setup for the server
+Dockerfile              Container image (API + frontend)
 tests/                  xUnit tests
 samples/score.abc       Official YuE2 example score
 ```

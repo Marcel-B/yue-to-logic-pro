@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # Version tags (v1.2.0) publish a matching image tag (1.2.0, 1.2).
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -93,3 +95,55 @@ jobs:
         run: |
           test -f out/publish/wwwroot/ui/index.html
           ls out/publish/wwwroot/ui/assets/*.js
+
+  image:
+    name: Container image
+    # Only images whose code passed the tests and the publish check are pushed.
+    needs: [build-and-test, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Pull requests only prove that the image builds; main and version tags push it to ghcr.io.
+      PUSH: ${{ github.event_name == 'push' }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # latest = newest main; sha-<commit> for every build; 1.2.0 and 1.2 for a v1.2.0 tag.
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=pr
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

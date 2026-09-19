@@ -1,0 +1,20 @@
+# Keep the build context small and free of local build output and secrets.
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/TestResults/
+**/*.mid
+**/*.user
+**/.DS_Store
+
+.git/
+.github/
+.vscode/
+.idea/
+.claude/
+deploy/
+out/
+publish/
+samples/
+tests/
