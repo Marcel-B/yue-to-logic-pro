@@ -36,6 +36,20 @@ public sealed class ClientAppEndpointTests(WebApplicationFactory<Program> factor
         Assert.True(response.Headers.CacheControl!.NoCache);
     }
 
+    [Theory]
+    [InlineData("/", HttpStatusCode.Redirect)]
+    [InlineData("/ui/", HttpStatusCode.OK)]
+    [InlineData("/api/health", HttpStatusCode.OK)]
+    // Only the status is checked: TestServer, unlike Kestrel, does not strip the body of HEAD responses.
+    public async Task Head_requests_are_answered_for_uptime_monitors(string path, HttpStatusCode expected)
+    {
+        var client = CreateClient(withBuild: true, allowRedirects: false);
+
+        var response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, path));
+
+        Assert.Equal(expected, response.StatusCode);
+    }
+
     [Fact]
     public async Task Built_assets_are_served_as_static_files()
     {

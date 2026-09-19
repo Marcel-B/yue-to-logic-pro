@@ -121,10 +121,15 @@ The image listens on port 8080, runs as an unprivileged user and keeps no state.
 1. **Container:** a Debian LXC container. For Docker inside an unprivileged container, enable *Options → Features → nesting* and *keyctl*. Install Docker Engine with the Compose plugin as described at <https://docs.docker.com/engine/install/debian/>.
 2. **Files:** copy [`deploy/compose.yml`](deploy/compose.yml) and [`deploy/.env.example`](deploy/.env.example) to e.g. `/opt/yue-to-logic/`, rename `.env.example` to `.env` and adjust it.
 3. **Start:** `docker compose pull && docker compose up -d`, check with `curl http://localhost:8080/api/health` (answers `ok`).
-4. **nginx:** copy [`deploy/nginx/music.idsrv.info.conf`](deploy/nginx/music.idsrv.info.conf) to the nginx host, set the container's IP in the `upstream` block, enable it and run `nginx -t && systemctl reload nginx`. The file also contains an HTTPS variant for a certificate for `music.idsrv.info` or `*.idsrv.info`. If nginx runs in the same container, set `HTTP_BIND=127.0.0.1` in `.env` so port 8080 is not reachable from the network.
-5. **AdGuard Home:** under *Filters → DNS rewrites* add `music.idsrv.info` → IP of the **nginx** host (not of the app container).
-6. Once <http://music.idsrv.info> works, set `ALLOWED_HOSTS=music.idsrv.info;localhost` in `.env` and run `docker compose up -d` again.
+4. **Nginx Proxy Manager:** *Hosts → Proxy Hosts → Add Proxy Host*
+   - *Details:* Domain Names `music.idsrv.info`, Scheme `http`, Forward Hostname/IP = IP of the container, Forward Port `8080`, *Block Common Exploits* on.
+   - *SSL:* choose or request a certificate (for a host that is only reachable privately, Let's Encrypt needs the DNS challenge, or use an existing `*.idsrv.info` wildcard certificate); enable *Force SSL* and *HTTP/2 Support*.
+   - Nothing else is needed: NPM sets the `X-Forwarded-*` headers itself, and its upload limit is well above the 1 MB a score may have.
+5. **AdGuard Home:** under *Filters → DNS rewrites* add `music.idsrv.info` → IP of the **Nginx Proxy Manager** host (not of the app container).
+6. Once <https://music.idsrv.info> works, set `ALLOWED_HOSTS=music.idsrv.info;localhost` in `.env` and run `docker compose up -d` again.
 7. **Update:** `docker compose pull && docker compose up -d`.
+
+`https://music.idsrv.info/` redirects to the interface at `/ui/`. If a browser keeps showing another page there (typically one cached while the proxy host was being set up), clear the site data for `music.idsrv.info` or try a private window.
 
 The container runs with a read-only file system, without Linux capabilities and with `no-new-privileges`. GitHub may create the image package as *private* on first push even though the repository is public: either set it to public once under *Packages → yue-to-logic-pro → Package settings*, or run `docker login ghcr.io` on the host with a token that has `read:packages`.
 
