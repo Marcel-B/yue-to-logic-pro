@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-and-test:
-    name: Build and test
+    name: Backend build and test
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -62,3 +62,34 @@ jobs:
           name: test-results
           path: TestResults
           if-no-files-found: ignore
+
+  publish:
+    name: Web frontend and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/YueToLogic.Api/ClientApp/package-lock.json
+
+      # The publish target runs npm ci and npm run build (vue-tsc type check + Vite bundle)
+      # and ships the frontend as wwwroot/ui, exactly as for a real deployment.
+      - name: Publish API with web frontend
+        run: dotnet publish src/YueToLogic.Api --configuration "$CONFIGURATION" --output out/publish
+
+      - name: Check published web frontend
+        run: |
+          test -f out/publish/wwwroot/ui/index.html
+          ls out/publish/wwwroot/ui/assets/*.js

@@ -481,3 +481,6 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 *.mid
+
+# Vue frontend build output (npm run build / dotnet publish)
+src/YueToLogic.Api/ClientApp/dist/
