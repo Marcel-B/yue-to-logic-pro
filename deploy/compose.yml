@@ -1,0 +1,32 @@
+# YuE to Logic on a Docker host (e.g. a Proxmox LXC container with Docker).
+#   cp .env.example .env    # adjust if needed
+#   docker compose pull && docker compose up -d
+name: yue-to-logic
+
+services:
+  web:
+    image: ghcr.io/marcel-b/yue-to-logic-pro:${IMAGE_TAG:-latest}
+    container_name: yue-to-logic
+    restart: unless-stopped
+    ports:
+      # nginx forwards music.idsrv.info to this port (see nginx/music.idsrv.info.conf).
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-8080}:8080"
+    environment:
+      # Honour X-Forwarded-For/-Proto set by the nginx reverse proxy (client IP, http/https).
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      # Host names the app answers to; "*" accepts any (see .env.example).
+      AllowedHosts: ${ALLOWED_HOSTS:-*}
+      TZ: ${TZ:-Europe/Berlin}
+    # The app keeps no state: nothing is written except temporary files.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
