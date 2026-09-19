@@ -1,0 +1,202 @@
+using System.Globalization;
+using YueToLogic.Core.Abc;
+using YueToLogic.Core.Arrangement;
+
+namespace YueToLogic.Cli;
+
+internal sealed record CliArguments
+{
+    public string InputPath { get; init; } = string.Empty;
+
+    public string? OutputPath { get; init; }
+
+    public string? JsonPath { get; init; }
+
+    public bool IncludeChords { get; init; } = true;
+
+    public int TicksPerQuarterNote { get; init; } = AbcParseOptions.DefaultTicksPerQuarterNote;
+
+    /// <summary>Octave shift for both voices; <see cref="VocalOctave"/> and <see cref="InsOctave"/> take precedence.</summary>
+    public int Octave { get; init; }
+
+    public int? VocalOctave { get; init; }
+
+    public int? InsOctave { get; init; }
+
+    public BassPattern? Bass { get; init; }
+
+    public bool Drums { get; init; }
+
+    public bool Force { get; init; }
+
+    public bool Verbose { get; init; }
+
+    public bool ShowHelp { get; init; }
+
+    /// <returns><c>false</c> with an <paramref name="error"/> message if the arguments are invalid.</returns>
+    public static bool TryParse(string[] args, CliText text, out CliArguments result, out string? error)
+    {
+        result = new CliArguments();
+        error = null;
+        string? input = null;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            switch (arg)
+            {
+                case "-h" or "--help":
+                    result = result with { ShowHelp = true };
+                    return true;
+                case "-o" or "--output":
+                    if (!TryTakeValue(args, ref i, text, out var output, out error))
+                    {
+                        return false;
+                    }
+
+                    result = result with { OutputPath = output };
+                    break;
+                case "--dump-json":
+                    if (!TryTakeValue(args, ref i, text, out var json, out error))
+                    {
+                        return false;
+                    }
+
+                    result = result with { JsonPath = json };
+                    break;
+                case "--ppq":
+                    if (!TryTakeValue(args, ref i, text, out var ppqText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(ppqText, NumberStyles.None, CultureInfo.InvariantCulture, out var ppq) || ppq is < 24 or > short.MaxValue)
+                    {
+                        error = text.Format(text.InvalidPpq, ppqText);
+                        return false;
+                    }
+
+                    result = result with { TicksPerQuarterNote = ppq };
+                    break;
+                case "--octave" or "--vocal-octave" or "--ins-octave":
+                    if (!TryTakeValue(args, ref i, text, out var octaveText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(octaveText, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var octaves)
+                        || octaves is < -MaxOctaves or > MaxOctaves)
+                    {
+                        error = text.Format(text.InvalidOctave, arg, octaveText, MaxOctaves);
+                        return false;
+                    }
+
+                    result = arg switch
+                    {
+                        "--vocal-octave" => result with { VocalOctave = octaves },
+                        "--ins-octave" => result with { InsOctave = octaves },
+                        _ => result with { Octave = octaves },
+                    };
+                    break;
+                case "--bass":
+                    result = result with { Bass = result.Bass ?? BassPattern.Eighths };
+                    break;
+                case "--bass-pattern":
+                    if (!TryTakeValue(args, ref i, text, out var patternText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!BassPatterns.TryGetValue(patternText, out var pattern))
+                    {
+                        error = text.Format(text.InvalidBassPattern, patternText, string.Join(", ", BassPatterns.Keys));
+                        return false;
+                    }
+
+                    result = result with { Bass = pattern };
+                    break;
+                case "--drums":
+                    result = result with { Drums = true };
+                    break;
+                case "--no-chords":
+                    result = result with { IncludeChords = false };
+                    break;
+                case "-f" or "--force":
+                    result = result with { Force = true };
+                    break;
+                case "-v" or "--verbose":
+                    result = result with { Verbose = true };
+                    break;
+                default:
+                    if (arg.StartsWith('-') && arg.Length > 1)
+                    {
+                        error = text.Format(text.UnknownOption, arg);
+                        return false;
+                    }
+
+                    if (input is not null)
+                    {
+                        error = text.Format(text.UnexpectedArgument, arg);
+                        return false;
+                    }
+
+                    input = arg;
+                    break;
+            }
+        }
+
+        if (input is null)
+        {
+            error = text.MissingInput;
+            return false;
+        }
+
+        result = result with { InputPath = input };
+        return true;
+    }
+
+    public ArrangementOptions ToArrangementOptions()
+    {
+        var shifts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (VocalOctave is { } vocal)
+        {
+            shifts["Vocal"] = vocal;
+        }
+
+        if (InsOctave is { } ins)
+        {
+            shifts["Ins"] = ins;
+        }
+
+        return new ArrangementOptions
+        {
+            DefaultOctaveShift = Octave,
+            OctaveShifts = shifts,
+            Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern } : null,
+            Drums = Drums ? new DrumOptions() : null,
+        };
+    }
+
+    private const int MaxOctaves = 4;
+
+    private static readonly Dictionary<string, BassPattern> BassPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["eighths"] = BassPattern.Eighths,
+        ["quarters"] = BassPattern.Quarters,
+        ["root-fifth"] = BassPattern.RootFifth,
+    };
+
+    private static bool TryTakeValue(string[] args, ref int i, CliText text, out string value, out string? error)
+    {
+        if (i + 1 >= args.Length)
+        {
+            value = string.Empty;
+            error = text.Format(text.MissingValue, args[i]);
+            return false;
+        }
+
+        value = args[++i];
+        error = null;
+        return true;
+    }
+}
