@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ApiError, convertScore } from './api'
+import { ApiError, convertScore, exportLogicProject, LogicExportError } from './api'
 import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
-import ScoreDropZone from './components/ScoreDropZone.vue'
+import FileDropZone from './components/FileDropZone.vue'
 import { locale, setLocale, t } from './i18n'
 import { loadFormState, saveFormState, toConversionOptions } from './options'
-import { baseName } from './score'
-import type { ConversionResult } from './types'
+import { baseName, download } from './score'
+import type { ConversionResult, Diagnostic } from './types'
 
 const file = ref<File | null>(null)
+const audio = ref<File | null>(null)
+const logicBusy = ref(false)
+const logicError = ref<string | null>(null)
+const logicWarnings = ref<Diagnostic[]>([])
 const form = ref(loadFormState())
 const outputName = ref('score')
 const result = ref<ConversionResult | null>(null)
@@ -36,6 +40,38 @@ function selectFile(selected: File): void {
   result.value = null
   stale.value = false
   error.value = null
+  logicError.value = null
+  logicWarnings.value = []
+}
+
+function selectAudio(selected: File | null): void {
+  audio.value = selected
+  logicError.value = null
+  logicWarnings.value = []
+}
+
+async function exportLogic(): Promise<void> {
+  if (!file.value || !audio.value) {
+    return
+  }
+
+  logicBusy.value = true
+  logicError.value = null
+  logicWarnings.value = []
+  try {
+    const exported = await exportLogicProject(file.value, audio.value, toConversionOptions(form.value), outputName.value)
+    logicWarnings.value = exported.warnings
+    download(exported.zip, exported.fileName)
+  } catch (caught) {
+    logicError.value =
+      caught instanceof LogicExportError
+        ? `${t('logicFailed')}: ${caught.message}`
+        : caught instanceof ApiError && caught.status === 0
+          ? t('networkError')
+          : `${t('logicFailed')}: ${caught instanceof Error ? caught.message : String(caught)}`
+  } finally {
+    logicBusy.value = false
+  }
 }
 
 async function convert(): Promise<void> {
@@ -85,7 +121,29 @@ async function convert(): Promise<void> {
   <main>
     <section class="card">
       <h2>{{ t('scoreTitle') }}</h2>
-      <ScoreDropZone :file="file" @select="selectFile" />
+      <FileDropZone
+        :file="file"
+        extension=".abc"
+        accept=".abc,text/plain,text/vnd.abc"
+        :drop-hint="t('dropHint')"
+        :wrong-type-hint="t('notAbc')"
+        @select="selectFile"
+        @clear="file = null"
+      />
+    </section>
+
+    <section class="card">
+      <h2>{{ t('audioTitle') }}</h2>
+      <p class="muted intro">{{ t('audioInfo') }}</p>
+      <FileDropZone
+        :file="audio"
+        extension=".flac"
+        accept=".flac,audio/flac,audio/x-flac"
+        :drop-hint="t('audioDropHint')"
+        :wrong-type-hint="t('notFlac')"
+        @select="selectAudio"
+        @clear="selectAudio(null)"
+      />
     </section>
 
     <section class="card">
@@ -107,7 +165,17 @@ async function convert(): Promise<void> {
       <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
     </section>
 
-    <ResultView v-if="result" :result="result" :output-name="outputName" :stale="stale" />
+    <ResultView
+      v-if="result"
+      :result="result"
+      :output-name="outputName"
+      :stale="stale"
+      :has-audio="audio !== null"
+      :logic-busy="logicBusy"
+      :logic-error="logicError"
+      :logic-warnings="logicWarnings"
+      @export-logic="exportLogic"
+    />
   </main>
 </template>
 
@@ -156,6 +224,11 @@ h1 {
 main {
   display: grid;
   gap: 1rem;
+}
+
+.intro {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.9rem;
 }
 
 .submit {

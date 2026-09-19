@@ -2,13 +2,20 @@
 import { computed, ref } from 'vue'
 import { t } from '../i18n'
 
-const props = defineProps<{ file: File | null }>()
-const emit = defineEmits<{ select: [file: File] }>()
+const props = defineProps<{
+  file: File | null
+  /** Expected file extension, e.g. ".abc"; other files are accepted but flagged. */
+  extension: string
+  accept: string
+  dropHint: string
+  wrongTypeHint: string
+}>()
+const emit = defineEmits<{ select: [file: File]; clear: [] }>()
 
 const input = ref<HTMLInputElement | null>(null)
 const dragDepth = ref(0)
 const dragging = computed(() => dragDepth.value > 0)
-const looksLikeAbc = computed(() => !props.file || props.file.name.toLowerCase().endsWith('.abc'))
+const expectedType = computed(() => !props.file || props.file.name.toLowerCase().endsWith(props.extension))
 
 function openDialog(): void {
   input.value?.click()
@@ -33,7 +40,10 @@ function onDrop(event: DragEvent): void {
 }
 
 function formatSize(bytes: number): string {
-  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 </script>
 
@@ -52,7 +62,7 @@ function formatSize(bytes: number): string {
     @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)"
     @drop.prevent="onDrop"
   >
-    <input ref="input" type="file" accept=".abc,text/plain,text/vnd.abc" hidden @change="onInput" />
+    <input ref="input" type="file" :accept="accept" hidden @change="onInput" />
 
     <template v-if="dragging">
       <p class="headline">{{ t('dropWhileDragging') }}</p>
@@ -60,18 +70,21 @@ function formatSize(bytes: number): string {
     <template v-else-if="file">
       <p class="headline file-name">{{ file.name }}</p>
       <p class="muted">{{ formatSize(file.size) }}</p>
-      <span class="link">{{ t('otherFile') }}</span>
+      <span class="links">
+        <span class="link">{{ t('otherFile') }}</span>
+        <button type="button" class="link" @click.stop="emit('clear')">{{ t('removeFile') }}</button>
+      </span>
     </template>
     <template v-else>
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 16V4m0 0L7 9m5-5 5 5M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
       </svg>
-      <p class="headline">{{ t('dropHint') }}</p>
+      <p class="headline">{{ dropHint }}</p>
       <p class="muted">{{ t('dropOr') }}</p>
       <span class="button secondary">{{ t('chooseFile') }}</span>
     </template>
   </div>
-  <p v-if="!looksLikeAbc" class="hint warning">{{ t('notAbc') }}</p>
+  <p v-if="!expectedType" class="hint warning">{{ wrongTypeHint }}</p>
 </template>
 
 <style scoped>
@@ -118,6 +131,11 @@ function formatSize(bytes: number): string {
 
 .muted {
   margin: 0;
+}
+
+.links {
+  display: flex;
+  gap: 1rem;
 }
 
 .icon {

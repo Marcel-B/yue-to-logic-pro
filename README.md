@@ -8,7 +8,7 @@
 
 The long-term goal of this project is a Logic Pro project with the generated audio as a region and matching MIDI tracks below it. It is meant as a starting point for analysing, editing or extending a song, not as a perfect transcription.
 
-**Current state:** converts `score.abc` into a MIDI file you can open in Logic Pro, from the command line or in a web interface.
+**Current state:** converts `score.abc` into a MIDI file and, together with the YuE audio, into a Logic Pro project — from the command line or in a web interface.
 
 ## Usage
 
@@ -42,6 +42,7 @@ MIDI:        /…/score.mid
 | `--bass-octave <n>` | Move the bass by `n` octaves (−2 to 2); implies `--bass` |
 | `--drums` | Add a drum track (see below) |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
+| `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
 | `--dump-json <file>` | Also write the parsed score and all diagnostics as JSON; `.json` is appended if missing |
 | `-f, --force` | Overwrite existing output files |
 | `-v, --verbose` | Also show informational messages |
@@ -81,6 +82,7 @@ If the frontend is built separately, for example in its own Docker stage, pass `
 |---|---|---|
 | `POST /api/convert` | multipart form: `file` (the score), optional `options` (JSON, see below) | `200` with score, diagnostics and `midi` (base64) as JSON; `422` with diagnostics if the score or options cannot be used; `400` for a missing file or malformed options |
 | `POST /api/convert/midi` | same | the MIDI file (`audio/midi`) |
+| `POST /api/convert/logic` | as above, plus `audio` (the `audio.flac`, up to 250 MB) and optional `name` | a ZIP with `<name>.logicx`; warnings in the `X-YueToLogic-Diagnostics` header; `422` if the audio is not a 48 kHz FLAC |
 | `GET /api/health` | – | `ok` |
 
 `options` is the JSON form of `ConversionOptions`; every field is optional:
@@ -104,6 +106,14 @@ curl -F file=@score.abc -F 'options={"arrangement":{"drums":{}}}' http://localho
 
 Clients served from another origin (for example an Electron shell) must be listed in `Cors:AllowedOrigins` in `appsettings.json`. The OpenAPI description is available at `/api/openapi`.
 
+## Logic Pro project (experimental)
+
+With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1 and the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, with tempo, meter and project length taken from the score.
+
+Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter and audio are replaced; the instruments chosen in that template are used for every project. The format was analysed and every change verified by opening the result in Logic. Limitations for now: only the first meter of a score is used, section markers and chord names are not yet in the Logic project (they are in the MIDI file), and the audio must be 48 kHz. A future Logic version may need a newly saved template.
+
+To use your own sounds, create a template the same way: open a MIDI file from this tool in Logic (*File → Open*), drag `audio.flac` onto a new audio track at bar 1, choose instruments, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`).
+
 ## Container and deployment
 
 CI builds a container image with API and web interface and pushes it to the GitHub Container Registry once tests and publish have passed:
@@ -124,7 +134,7 @@ The image listens on port 8080, runs as an unprivileged user and keeps no state.
 4. **Nginx Proxy Manager:** *Hosts → Proxy Hosts → Add Proxy Host*
    - *Details:* Domain Names `music.idsrv.info`, Scheme `http`, Forward Hostname/IP = IP of the container, Forward Port `8080`, *Block Common Exploits* on.
    - *SSL:* choose or request a certificate (for a host that is only reachable privately, Let's Encrypt needs the DNS challenge, or use an existing `*.idsrv.info` wildcard certificate); enable *Force SSL* and *HTTP/2 Support*.
-   - Nothing else is needed: NPM sets the `X-Forwarded-*` headers itself, and its upload limit is well above the 1 MB a score may have.
+   - NPM sets the `X-Forwarded-*` headers itself. For the Logic export, uploads of 45–100 MB audio must pass: if NPM answers `413 Request Entity Too Large`, add `client_max_body_size 300m;` under *Advanced*.
 5. **AdGuard Home:** under *Filters → DNS rewrites* add `music.idsrv.info` → IP of the **Nginx Proxy Manager** host (not of the app container).
 6. Once <https://music.idsrv.info> works, set `ALLOWED_HOSTS=music.idsrv.info;localhost` in `.env` and run `docker compose up -d` again.
 7. **Update:** `docker compose pull && docker compose up -d`.
@@ -157,6 +167,7 @@ YuE2 writes a deliberately small subset of ABC notation. A generic ABC parser wo
 ```
 src/YueToLogic.Core/    Library: ABC parsing, score model, MIDI rendering
 src/YueToLogic.Cli/     Command-line tool (yue2logic)
+  Logic/                Logic Pro project writer and the embedded template
 src/YueToLogic.Api/     ASP.NET Core API; serves the web frontend under /ui
   ClientApp/            Vue 3 + Vite + TypeScript frontend
 deploy/                 Docker Compose setup for the server
@@ -193,4 +204,6 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-Producing a complete `.logicx` project. Logic's project format is an undocumented binary package, so the likely next step is an output folder with the MIDI file and the copied audio that can be imported into Logic in one go.
+- Section markers and chord names in the Logic project.
+- Logic projects without audio.
+- Meter changes within a song in the Logic project.
