@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 
 # Vue frontend build output (npm run build / dotnet publish)
 src/YueToLogic.Api/ClientApp/dist/
+
+# Local deployment settings (template: deploy/.env.example)
+deploy/.env
