@@ -1,4 +1,4 @@
-import type { BassPattern, ConversionOptions, DrumPattern } from './types'
+import type { BassPattern, ChordPattern, ConversionOptions, DrumPattern } from './types'
 
 /** The parameter form as the UI edits it; converted to the API's ConversionOptions on submit. */
 export interface FormState {
@@ -11,6 +11,8 @@ export interface FormState {
   bassOctave: number
   drums: 'off' | DrumPattern
   crash: boolean
+  /** 'as-written' plays one sustained block chord per symbol, as the score notates it. */
+  chordPattern: 'as-written' | ChordPattern
   ppq: number
 }
 
@@ -23,6 +25,7 @@ export const defaultFormState = (): FormState => ({
   bassOctave: 0,
   drums: 'off',
   crash: true,
+  chordPattern: 'as-written',
   ppq: 480,
 })
 
@@ -43,6 +46,8 @@ export function toConversionOptions(form: FormState): ConversionOptions {
       octaveShifts,
       bass: form.bass === 'off' ? null : { pattern: form.bass, octaveShift: form.bassOctave },
       drums: form.drums === 'off' ? null : { pattern: form.drums, crashOnSections: form.crash },
+      chords:
+        !form.includeChords || form.chordPattern === 'as-written' ? null : { pattern: form.chordPattern },
     },
   }
 }

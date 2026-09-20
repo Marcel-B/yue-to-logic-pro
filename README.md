@@ -97,7 +97,8 @@ If the frontend is built separately, for example in its own Docker stage, pass `
     "defaultOctaveShift": 0,
     "octaveShifts": { "Vocal": -1 },
     "bass": { "pattern": "Eighths", "octaveShift": 0 },
-    "drums": { "pattern": "Backbeat", "crashOnSections": true }
+    "drums": { "pattern": "Backbeat", "crashOnSections": true },
+    "chords": { "pattern": "Offbeat", "octaveShift": 0 }
   }
 }
 ```
@@ -154,11 +155,11 @@ A Standard MIDI File, type 1:
 | `Conductor` | Tempo, meter, key and a marker for every section (`verse`, `chorus`, …); Logic puts these into its global tracks |
 | `Vocal` | The vocal melody |
 | `Ins` | The instrumental melody |
-| `Chords` | The chord symbols played as block chords (root in octave 3, slash bass below), plus the symbol as a text event |
-| `Bass` | Only with `--bass`: the bass note of every chord in the register E2–D♯3 (MIDI 40–51, in Logic's naming E1–D♯2), which every bass instrument can play; `--bass-octave -1` goes down to the lowest bass-guitar string. Slash chords such as `C/E` play their bass note. Notes are slightly detached, on-beat notes a little louder. `root-fifth` alternates quarter notes between bass note and the chord's fifth |
-| `Drums` | Only with `--drums`: *four on the floor* plays the kick on every beat, *backbeat* on 1 and 3 with an open hi-hat on the last eighth (4+). Both play the snare on 2 and 4, a closed hi-hat in eighth notes (off-beats softer) and a crash cymbal at the start of every section. General MIDI note numbers on channel 10, which Logic's drum kits understand. In 3/4 the snare plays on beat 2; 6/8 is counted in dotted quarters |
+| `Chords` | The chord symbols played as block chords (root in octave 3, slash bass below), plus the symbol as a text event. With `--chord-pattern` instead `eighths` (the whole chord on every eighth), `offbeat` (short chords on the off-beats only) or `arpeggio` (the chord notes one after another, in eighths, upwards) |
+| `Bass` | Only with `--bass`: the bass note of every chord in the register E2–D♯3 (MIDI 40–51, in Logic's naming E1–D♯2), which every bass instrument can play; `--bass-octave -1` goes down to the lowest bass-guitar string. Slash chords such as `C/E` play their bass note. Notes are slightly detached, on-beat notes a little louder. `root-fifth` alternates quarter notes between bass note and the chord's fifth, `octaves` eighth notes with the octave above, `offbeat` plays the off-beat eighths only and `sustained` one long note per chord |
+| `Drums` | Only with `--drums`: *four on the floor* plays the kick on every beat, *backbeat* on 1 and 3 with an open hi-hat on the last eighth (4+), *half-time* on 1 only with the snare on 3, *disco* on every beat with an open hi-hat on every off-beat. The others play the snare on 2 and 4, a closed hi-hat in eighth notes (off-beats softer) and a crash cymbal at the start of every section. General MIDI note numbers on channel 10, which Logic's drum kits understand. In 3/4 the snare plays on beat 2; 6/8 is counted in dotted quarters |
 
-The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Bass"` or `"Drums"`.
+The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"` or `"Drums"`. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
 
 ## The input format
 
@@ -206,4 +207,4 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- Choosing the instruments without having to create your own template.
+- More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.

@@ -20,6 +20,15 @@ function signed(value: number): string {
         <input v-model="form.includeChords" type="checkbox" />
         {{ t('includeChords') }}
       </label>
+      <label class="select-full" :class="{ disabled: !form.includeChords }">
+        <span class="sr-only">{{ t('chordPattern') }}</span>
+        <select v-model="form.chordPattern" :disabled="!form.includeChords">
+          <option value="as-written">{{ t('chordsAsWritten') }}</option>
+          <option value="Eighths">{{ t('chordsEighths') }}</option>
+          <option value="Offbeat">{{ t('chordsOffbeat') }}</option>
+          <option value="ArpeggioUp">{{ t('chordsArpeggio') }}</option>
+        </select>
+      </label>
     </fieldset>
 
     <fieldset>
@@ -58,6 +67,9 @@ function signed(value: number): string {
             <option value="Eighths">{{ t('bassEighths') }}</option>
             <option value="Quarters">{{ t('bassQuarters') }}</option>
             <option value="RootFifth">{{ t('bassRootFifth') }}</option>
+            <option value="Octaves">{{ t('bassOctaves') }}</option>
+            <option value="Offbeat">{{ t('bassOffbeat') }}</option>
+            <option value="Sustained">{{ t('bassSustained') }}</option>
           </select>
         </label>
         <label>
@@ -77,6 +89,8 @@ function signed(value: number): string {
           <option value="off">{{ t('drumsOff') }}</option>
           <option value="FourOnTheFloor">{{ t('drumsOn') }}</option>
           <option value="Backbeat">{{ t('drumsBackbeat') }}</option>
+          <option value="HalfTime">{{ t('drumsHalfTime') }}</option>
+          <option value="Disco">{{ t('drumsDisco') }}</option>
         </select>
       </label>
       <label class="check" :class="{ disabled: form.drums === 'off' }">

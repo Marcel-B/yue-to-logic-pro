@@ -17,7 +17,7 @@ export interface NoteEvent {
   velocity: number | null
 }
 
-export type TrackKind = 'Melody' | 'Bass' | 'Drums'
+export type TrackKind = 'Melody' | 'Chords' | 'Bass' | 'Drums'
 
 export interface VoiceTrack {
   id: string
@@ -72,9 +72,11 @@ export interface ConversionResult {
   diagnostics: Diagnostic[]
 }
 
-export type BassPattern = 'Eighths' | 'Quarters' | 'RootFifth'
+export type BassPattern = 'Eighths' | 'Quarters' | 'RootFifth' | 'Octaves' | 'Offbeat' | 'Sustained'
 
-export type DrumPattern = 'FourOnTheFloor' | 'Backbeat'
+export type DrumPattern = 'FourOnTheFloor' | 'Backbeat' | 'HalfTime' | 'Disco'
+
+export type ChordPattern = 'Block' | 'Eighths' | 'Offbeat' | 'ArpeggioUp'
 
 export interface ConversionOptions {
   ticksPerQuarterNote: number
@@ -84,5 +86,6 @@ export interface ConversionOptions {
     octaveShifts: Record<string, number>
     bass: { pattern: BassPattern; octaveShift: number } | null
     drums: { pattern: DrumPattern; crashOnSections: boolean } | null
+    chords: { pattern: ChordPattern } | null
   }
 }

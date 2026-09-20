@@ -18,6 +18,7 @@ internal sealed class CliText
     public required string InvalidOctave { get; init; }
     public required string InvalidBassPattern { get; init; }
     public required string InvalidDrumPattern { get; init; }
+    public required string InvalidChordPattern { get; init; }
     public required string InputNotFound { get; init; }
     public required string OutputExists { get; init; }
     public required string ReadFailed { get; init; }
@@ -76,11 +77,14 @@ internal sealed class CliText
                   --vocal-octave <n>  Move only the vocal melody (takes precedence over --octave)
                   --ins-octave <n>    Move only the instrumental melody (takes precedence over --octave)
                   --bass              Add a bass track playing the chord roots in eighth notes
-                  --bass-pattern <p>  Bass rhythm: eighths (default), quarters, root-fifth; implies --bass
+                  --bass-pattern <p>  Bass rhythm: eighths (default), quarters, root-fifth, octaves, offbeat,
+                                      sustained; implies --bass
                   --bass-octave <n>   Move the bass by n octaves (-2 to 2); implies --bass
                   --drums             Add a four-on-the-floor drum track with a crash on every section
                   --drum-pattern <p>  Drum groove: four-on-the-floor (default), backbeat (kick 1+3, snare 2+4,
-                                      open hi-hat on 4+); implies --drums
+                                      open hi-hat on 4+), half-time, disco; implies --drums
+                  --chord-pattern <p> How the chords are played: block (default, as written), eighths, offbeat,
+                                      arpeggio
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
                   --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
@@ -99,6 +103,7 @@ internal sealed class CliText
         InvalidOctave = "Invalid {0} value '{1}'; expected a whole number between -{2} and {2}.",
         InvalidBassPattern = "Unknown bass pattern '{0}'; expected one of: {1}.",
         InvalidDrumPattern = "Unknown drum pattern '{0}'; expected one of: {1}.",
+        InvalidChordPattern = "Unknown chord pattern '{0}'; expected one of: {1}.",
         InputNotFound = "Input file not found: {0}",
         OutputExists = "Output file already exists: {0} (use --force to overwrite)",
         ReadFailed = "Could not read {0}: {1}",
@@ -145,11 +150,13 @@ internal sealed class CliText
                   --vocal-octave <n>  Nur die Gesangsmelodie verschieben (hat Vorrang vor --octave)
                   --ins-octave <n>    Nur die Instrumentalmelodie verschieben (hat Vorrang vor --octave)
                   --bass              Bassspur hinzufügen, spielt die Akkordgrundtöne in Achteln
-                  --bass-pattern <p>  Bassrhythmus: eighths (Standard), quarters, root-fifth; schließt --bass ein
+                  --bass-pattern <p>  Bassrhythmus: eighths (Standard), quarters, root-fifth, octaves, offbeat,
+                                      sustained; schließt --bass ein
                   --bass-octave <n>   Bass um n Oktaven verschieben (-2 bis 2); schließt --bass ein
                   --drums             Schlagzeugspur (Four on the Floor) mit Crash zu jedem Abschnitt hinzufügen
                   --drum-pattern <p>  Groove: four-on-the-floor (Standard), backbeat (Kick 1+3, Snare 2+4,
-                                      offene Hi-Hat auf 4+); schließt --drums ein
+                                      offene Hi-Hat auf 4+), half-time, disco; schließt --drums ein
+                  --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, offbeat, arpeggio
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
                   --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
@@ -168,6 +175,7 @@ internal sealed class CliText
         InvalidOctave = "Ungültiger Wert für {0}: '{1}'; erwartet wird eine ganze Zahl zwischen -{2} und {2}.",
         InvalidBassPattern = "Unbekanntes Bassmuster '{0}'; erlaubt sind: {1}.",
         InvalidDrumPattern = "Unbekanntes Schlagzeugmuster '{0}'; erlaubt sind: {1}.",
+        InvalidChordPattern = "Unbekanntes Akkordmuster '{0}'; erlaubt sind: {1}.",
         InputNotFound = "Eingabedatei nicht gefunden: {0}",
         OutputExists = "Ausgabedatei existiert bereits: {0} (mit --force überschreiben)",
         ReadFailed = "{0} konnte nicht gelesen werden: {1}",
