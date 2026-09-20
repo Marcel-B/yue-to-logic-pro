@@ -36,6 +36,9 @@ internal sealed record CliArguments
 
     public DrumPattern? Drums { get; init; }
 
+    /// <summary>How the chord symbols are played; without it they sound as written, as block chords.</summary>
+    public ChordPattern? Chords { get; init; }
+
     public bool Force { get; init; }
 
     public bool Verbose { get; init; }
@@ -155,6 +158,20 @@ internal sealed record CliArguments
 
                     result = result with { Drums = drumPattern };
                     break;
+                case "--chord-pattern":
+                    if (!TryTakeValue(args, ref i, text, out var chordText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!ChordPatterns.TryGetValue(chordText, out var chordPattern))
+                    {
+                        error = text.Format(text.InvalidChordPattern, chordText, string.Join(", ", ChordPatterns.Keys));
+                        return false;
+                    }
+
+                    result = result with { Chords = chordPattern };
+                    break;
                 case "--no-chords":
                     result = result with { IncludeChords = false };
                     break;
@@ -211,6 +228,7 @@ internal sealed record CliArguments
             OctaveShifts = shifts,
             Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern, OctaveShift = BassOctave } : null,
             Drums = Drums is { } drums ? new DrumOptions { Pattern = drums } : null,
+            Chords = Chords is { } chords ? new ChordOptions { Pattern = chords } : null,
         };
     }
 
@@ -219,12 +237,25 @@ internal sealed record CliArguments
         ["eighths"] = BassPattern.Eighths,
         ["quarters"] = BassPattern.Quarters,
         ["root-fifth"] = BassPattern.RootFifth,
+        ["octaves"] = BassPattern.Octaves,
+        ["offbeat"] = BassPattern.Offbeat,
+        ["sustained"] = BassPattern.Sustained,
+    };
+
+    private static readonly Dictionary<string, ChordPattern> ChordPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["block"] = ChordPattern.Block,
+        ["eighths"] = ChordPattern.Eighths,
+        ["offbeat"] = ChordPattern.Offbeat,
+        ["arpeggio"] = ChordPattern.ArpeggioUp,
     };
 
     private static readonly Dictionary<string, DrumPattern> DrumPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
         ["four-on-the-floor"] = DrumPattern.FourOnTheFloor,
         ["backbeat"] = DrumPattern.Backbeat,
+        ["half-time"] = DrumPattern.HalfTime,
+        ["disco"] = DrumPattern.Disco,
     };
 
     private static bool TryTakeValue(string[] args, ref int i, CliText text, out string value, out string? error)

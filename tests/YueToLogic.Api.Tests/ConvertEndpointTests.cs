@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using YueToLogic.Api;
 using YueToLogic.Core.Conversion;
 using YueToLogic.Core.Diagnostics;
+using YueToLogic.Core.Model;
 using YueToLogic.Core.Serialization;
 
 namespace YueToLogic.Api.Tests;
@@ -32,6 +33,19 @@ public class ConvertEndpointTests(WebApplicationFactory<Program> factory) : ICla
         Assert.True(result.Success);
         Assert.Equal(["Vocal", "Ins", "Bass", "Drums"], result.Score!.Voices.Select(v => v.Id));
         Assert.Equal("MThd", Encoding.ASCII.GetString(result.Midi!, 0, 4));
+    }
+
+    [Fact]
+    public async Task Chord_pattern_adds_a_played_out_chord_track()
+    {
+        var response = await _client.PostAsync("/api/convert", Form(SampleScore, """{"arrangement":{"chords":{"pattern":"offbeat"}}}"""));
+
+        var result = await ReadResultAsync(response);
+        Assert.True(result.Success);
+        var chords = result.Score!.Voices.Single(v => v.Id == "Chords");
+        Assert.Equal(TrackKind.Chords, chords.Kind);
+        Assert.Equal(8 * 4 * 3, chords.Notes.Count); // eight bars, four off-beat chords each, three notes per chord
+        Assert.Equal(62, chords.Notes[0].Velocity); // the default velocity of 72, softened off the beat: it survived the partial options document
     }
 
     [Fact]
