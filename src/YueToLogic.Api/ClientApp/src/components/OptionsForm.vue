@@ -110,9 +110,16 @@ function signed(value: number): string {
 </template>
 
 <style scoped>
+/* On a wide screen the groups stand next to each other instead of stretching across the whole card. */
 .options {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem 2rem;
+  align-items: start;
+}
+
+.options > details {
+  grid-column: 1 / -1;
 }
 
 fieldset {
@@ -142,6 +149,12 @@ legend {
   min-width: 8.5rem;
   color: var(--text-muted);
   font-size: 0.875rem;
+}
+
+/* A select is as wide as its longest option unless it is told otherwise, which would overflow the row. */
+.row label select {
+  width: 100%;
+  min-width: 0;
 }
 
 .row .grow {
