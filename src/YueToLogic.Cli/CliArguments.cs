@@ -13,8 +13,11 @@ internal sealed record CliArguments
 
     public string? JsonPath { get; init; }
 
-    /// <summary>YuE audio.flac; when set, a Logic Pro project is written next to the MIDI file.</summary>
+    /// <summary>YuE audio.flac of a Logic Pro project written with audio.</summary>
     public string? LogicAudioPath { get; init; }
+
+    /// <summary>Whether a Logic Pro project is written next to the MIDI file, with or without audio.</summary>
+    public bool WriteLogicProject { get; init; }
 
     public bool IncludeChords { get; init; } = true;
 
@@ -76,7 +79,10 @@ internal sealed record CliArguments
                         return false;
                     }
 
-                    result = result with { LogicAudioPath = audio };
+                    result = result with { LogicAudioPath = audio, WriteLogicProject = true };
+                    break;
+                case "--logic-no-audio":
+                    result = result with { WriteLogicProject = true };
                     break;
                 case "--ppq":
                     if (!TryTakeValue(args, ref i, text, out var ppqText, out error))
