@@ -131,14 +131,14 @@ function downloadJson(): void {
         <button
           type="button"
           class="button secondary"
-          :disabled="!hasAudio || logicBusy"
-          :title="hasAudio ? t('logicHint') : t('logicNeedsAudio')"
+          :disabled="logicBusy"
+          :title="hasAudio ? t('logicHint') : t('logicWithoutAudio')"
           @click="emit('exportLogic')"
         >
           {{ logicBusy ? t('buildingLogic') : t('downloadLogic') }}
         </button>
       </div>
-      <p class="hint muted">{{ hasAudio ? t('logicHint') : t('logicNeedsAudio') }}</p>
+      <p class="hint muted">{{ hasAudio ? t('logicHint') : t('logicWithoutAudio') }}</p>
       <p v-if="logicError" class="hint danger" role="alert">{{ logicError }}</p>
       <div v-if="logicWarnings.length" class="logic-warnings">
         <h3>{{ t('logicWarnings') }}</h3>

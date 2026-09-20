@@ -53,17 +53,19 @@ export interface LogicExport {
   warnings: Diagnostic[]
 }
 
-/** Builds a zipped Logic Pro project (.logicx) from the score, its audio.flac and the options. */
+/** Builds a zipped Logic Pro project (.logicx) from the score, the options and, if given, its audio.flac. */
 export async function exportLogicProject(
   file: File,
-  audio: File,
+  audio: File | null,
   options: ConversionOptions,
   name: string,
   signal?: AbortSignal,
 ): Promise<LogicExport> {
   const form = new FormData()
   form.append('file', file)
-  form.append('audio', audio)
+  if (audio) {
+    form.append('audio', audio)
+  }
   form.append('options', JSON.stringify(options))
   form.append('name', name)
 

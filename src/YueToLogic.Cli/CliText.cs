@@ -84,6 +84,7 @@ internal sealed class CliText
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
                   --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
+                  --logic-no-audio    Also write a Logic Pro project without audio (its audio track stays empty)
               -f, --force             Overwrite existing output files
               -v, --verbose           Also show informational messages
               -h, --help              Show this help
@@ -152,6 +153,7 @@ internal sealed class CliText
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
                   --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
+                  --logic-no-audio    Zusätzlich ein Logic-Pro-Projekt ohne Audio (die Audiospur bleibt leer)
               -f, --force             Vorhandene Ausgabedateien überschreiben
               -v, --verbose           Auch Info-Meldungen anzeigen
               -h, --help              Diese Hilfe anzeigen

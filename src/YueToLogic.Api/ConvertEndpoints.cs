@@ -43,13 +43,13 @@ public static class ConvertEndpoints
             .WithName("ConvertToMidi")
             .WithSummary("Converts a score.abc and returns the Standard MIDI File.");
 
-        // Returns a ZIP with a Logic Pro project (.logicx) built from the score and the uploaded audio.flac.
+        // Returns a ZIP with a Logic Pro project (.logicx) built from the score and, if one was uploaded, the audio.flac.
         api.MapPost("/convert/logic", ConvertToLogicAsync)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes + MaxScoreBytes + 64 * 1024))
             .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes)
             .WithName("ConvertToLogic")
-            .WithSummary("Converts a score.abc plus its audio.flac into a zipped Logic Pro project.");
+            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project.");
 
         return api;
     }
@@ -64,12 +64,7 @@ public static class ConvertEndpoints
         HttpContext context,
         CancellationToken cancellationToken)
     {
-        if (audio is null || audio.Length == 0)
-        {
-            return BadRequest("Missing audio file", "Send the audio.flac from the same YuE run as form field 'audio'.");
-        }
-
-        if (audio.Length > MaxAudioBytes)
+        if (audio is { Length: > MaxAudioBytes })
         {
             return BadRequest("Audio file too large", $"The audio may have at most {MaxAudioBytes / (1024 * 1024)} MB.");
         }
@@ -100,7 +95,7 @@ public static class ConvertEndpoints
         LogicProjectResult logic;
         try
         {
-            await using var audioStream = audio.OpenReadStream();
+            await using var audioStream = audio is { Length: > 0 } ? audio.OpenReadStream() : null;
             using (var sink = new ZipLogicPackageSink(zip, packageName))
             {
                 logic = await writer.WriteAsync(result.Score!, audioStream, sink, new LogicProjectOptions { ProjectName = packageName }, cancellationToken);

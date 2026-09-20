@@ -44,6 +44,7 @@ MIDI:        /…/score.mid
 | `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`; implies `--drums` |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
+| `--logic-no-audio` | Also write a Logic Pro project without audio; its audio track stays empty |
 | `--dump-json <file>` | Also write the parsed score and all diagnostics as JSON; `.json` is appended if missing |
 | `-f, --force` | Overwrite existing output files |
 | `-v, --verbose` | Also show informational messages |
@@ -83,7 +84,7 @@ If the frontend is built separately, for example in its own Docker stage, pass `
 |---|---|---|
 | `POST /api/convert` | multipart form: `file` (the score), optional `options` (JSON, see below) | `200` with score, diagnostics and `midi` (base64) as JSON; `422` with diagnostics if the score or options cannot be used; `400` for a missing file or malformed options |
 | `POST /api/convert/midi` | same | the MIDI file (`audio/midi`) |
-| `POST /api/convert/logic` | as above, plus `audio` (the `audio.flac`, up to 250 MB) and optional `name` | a ZIP with `<name>.logicx`; warnings in the `X-YueToLogic-Diagnostics` header; `422` if the audio is not a 48 kHz FLAC |
+| `POST /api/convert/logic` | as above, with optional `audio` (the `audio.flac`, up to 250 MB) and `name` | a ZIP with `<name>.logicx`; warnings in the `X-YueToLogic-Diagnostics` header; `422` if the audio is not a 48 kHz FLAC |
 | `GET /api/health` | – | `ok` |
 
 `options` is the JSON form of `ConversionOptions`; every field is optional:
@@ -109,9 +110,9 @@ Clients served from another origin (for example an Electron shell) must be liste
 
 ## Logic Pro project (experimental)
 
-With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1, the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, the song sections as arrangement markers and every chord on Logic's chord track (which Session Players can follow), with tempo, meter and project length taken from the score.
+With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1, the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, the song sections as arrangement markers and every chord on Logic's chord track (which Session Players can follow), plus tempo, key, every meter change and the project length taken from the score. Without audio (CLI `--logic-no-audio`, web interface: simply leave the `audio.flac` out) you get the same project with an empty audio track, ready for the FLAC to be dropped onto later; the template's audio file object and its region are removed, as Logic would otherwise report a missing file when opening the project.
 
-Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter, markers, chords and audio are replaced; chord regions and marker names beyond the template's are added as new objects, registered the way Logic does it. The instruments chosen in that template are used for every project. The format was analysed and every change verified by opening, editing, saving and reopening the result in Logic. Limitations: only the first meter of a score is used, the audio must be 48 kHz, and the chord scales offered to Session Players are a default per chord type. A future Logic version may need a newly saved template.
+Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter, markers, chords and audio are replaced; chord regions and marker names beyond the template's are added as new objects, registered the way Logic does it. The instruments chosen in that template are used for every project. The format was analysed and every change verified by opening, editing, saving and reopening the result in Logic. Limitations: the audio must be 48 kHz, and the chord scales offered to Session Players are a default per chord type. A future Logic version may need a newly saved template.
 
 To use your own sounds, create a template the same way: open a MIDI file from this tool in Logic (*File → Open*), drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`).
 
@@ -205,6 +206,4 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- Logic projects without audio.
-- Meter changes within a song in the Logic project.
-- Key signature in the Logic project.
+- Choosing the instruments without having to create your own template.

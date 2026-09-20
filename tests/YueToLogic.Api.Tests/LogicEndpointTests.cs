@@ -64,11 +64,15 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
     }
 
     [Fact]
-    public async Task Missing_audio_is_a_bad_request()
+    public async Task Without_audio_the_project_is_written_with_an_empty_audio_track()
     {
         var response = await _client.PostAsync("/api/convert/logic", Form(SampleScore, audio: null));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var archive = new ZipArchive(await response.Content.ReadAsStreamAsync());
+        var entries = archive.Entries.Select(e => e.FullName).ToList();
+        Assert.Contains("score.logicx/Alternatives/000/ProjectData", entries);
+        Assert.DoesNotContain(entries, e => e.EndsWith("audio.flac", StringComparison.Ordinal));
     }
 
     private static MultipartFormDataContent Form(string score, byte[]? audio, string? name = null)

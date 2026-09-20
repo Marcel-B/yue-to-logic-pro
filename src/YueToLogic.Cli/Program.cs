@@ -32,7 +32,7 @@ var midiPath = Path.GetFullPath(options.OutputPath is null
     : EnsureExtension(options.OutputPath, ".mid", ".midi"));
 var jsonPath = options.JsonPath is null ? null : Path.GetFullPath(EnsureExtension(options.JsonPath, ".json"));
 var logicAudioPath = options.LogicAudioPath is null ? null : Path.GetFullPath(options.LogicAudioPath);
-var logicPath = logicAudioPath is null ? null : Path.ChangeExtension(midiPath, ".logicx");
+var logicPath = options.WriteLogicProject ? Path.ChangeExtension(midiPath, ".logicx") : null;
 
 if (!File.Exists(inputPath))
 {
@@ -96,7 +96,7 @@ if (!await TryWriteAsync(midiPath, () => File.WriteAllBytesAsync(midiPath, resul
     return ExitUsageOrIoError;
 }
 
-if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, logicAudioPath!, logicPath))
+if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, logicAudioPath, logicPath))
 {
     return ExitConversionFailed;
 }
@@ -104,7 +104,7 @@ if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, log
 PrintSummary(result.Score!);
 return ExitSuccess;
 
-async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string audioPath, string packagePath)
+async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPath, string packagePath)
 {
     try
     {
@@ -113,7 +113,7 @@ async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string audioPath
             Directory.Delete(packagePath, recursive: true); // only reached with --force
         }
 
-        await using var audio = File.OpenRead(audioPath);
+        await using var audio = audioPath is null ? null : File.OpenRead(audioPath);
         var logic = await new LogicProjectWriter().WriteAsync(
             score,
             audio,

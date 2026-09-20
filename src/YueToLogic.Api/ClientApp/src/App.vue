@@ -51,7 +51,7 @@ function selectAudio(selected: File | null): void {
 }
 
 async function exportLogic(): Promise<void> {
-  if (!file.value || !audio.value) {
+  if (!file.value) {
     return
   }
 
