@@ -140,32 +140,34 @@ async function convert(): Promise<void> {
   </header>
 
   <main>
-    <section class="card">
-      <h2>{{ t('scoreTitle') }}</h2>
-      <FileDropZone
-        :file="file"
-        extension=".abc"
-        accept=".abc,text/plain,text/vnd.abc"
-        :drop-hint="t('dropHint')"
-        :wrong-type-hint="t('notAbc')"
-        @select="selectFile"
-        @clear="file = null"
-      />
-    </section>
+    <div class="files">
+      <section class="card">
+        <h2>{{ t('scoreTitle') }}</h2>
+        <FileDropZone
+          :file="file"
+          extension=".abc"
+          accept=".abc,text/plain,text/vnd.abc"
+          :drop-hint="t('dropHint')"
+          :wrong-type-hint="t('notAbc')"
+          @select="selectFile"
+          @clear="file = null"
+        />
+      </section>
 
-    <section class="card">
-      <h2>{{ t('audioTitle') }}</h2>
-      <p class="muted intro">{{ t('audioInfo') }}</p>
-      <FileDropZone
-        :file="audio"
-        extension=".flac"
-        accept=".flac,audio/flac,audio/x-flac"
-        :drop-hint="t('audioDropHint')"
-        :wrong-type-hint="t('notFlac')"
-        @select="selectAudio"
-        @clear="selectAudio(null)"
-      />
-    </section>
+      <section class="card">
+        <h2>{{ t('audioTitle') }}</h2>
+        <p class="muted intro">{{ t('audioInfo') }}</p>
+        <FileDropZone
+          :file="audio"
+          extension=".flac"
+          accept=".flac,audio/flac,audio/x-flac"
+          :drop-hint="t('audioDropHint')"
+          :wrong-type-hint="t('notFlac')"
+          @select="selectAudio"
+          @clear="selectAudio(null)"
+        />
+      </section>
+    </div>
 
     <section class="card">
       <h2>{{ t('optionsTitle') }}</h2>
@@ -256,6 +258,24 @@ h1 {
 main {
   display: grid;
   gap: 1rem;
+}
+
+/* Score and audio side by side; below a certain width each one takes the whole row. */
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.files > .card {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-direction: column;
+}
+
+/* The drop zone is a child component, so its own root element needs a deep selector. */
+.files .card :deep(.drop-zone) {
+  flex: 1;
 }
 
 .intro {
