@@ -74,6 +74,17 @@ Preferably open the MIDI file with *File → Open*: Logic then creates a new pro
 
 A Vue frontend lets you drop a `score.abc` (or pick it with a file dialog), set the same parameters as the CLI, and download the MIDI file and the JSON dump. It also shows tempo, meter, key, length, the song sections and all diagnostics.
 
+### Preview
+
+Every conversion is shown as a piano roll: a bar ruler with the song sections, the chord symbols, and one lane per track, zoomable and scrollable. It answers the question the parameters keep raising - does the register fit, does the pattern fit, do the chords sit where they should - without the detour through Logic. The drawing is done on a canvas and only for the visible slice, so a song with several thousand notes still scrolls smoothly.
+
+The preview also plays. Each track is routed on its own, to a MIDI port and channel or to the browser's own sound:
+
+- **MIDI** sends to real instruments. Every track has its own port and channel (1-16, as the device labels them), so a rack of synthesizers can be driven where each one listens. A *Test* button per track sends a single note, which is the quickest way to tell a wiring problem from a routing one, and *Panic* lifts every key on every output when an instrument hangs. The routing is remembered per track name, so a fixed setup is entered once.
+- **Browser sound** needs no hardware: a sawtooth with an envelope for pitched tracks and filtered noise for the drums. It is a rough stand-in, enough to check timing, swing and register.
+
+Web MIDI is only available over HTTPS or on localhost, and only in browsers that implement it - Chrome does, Safari does not, where the preview falls back to the browser sound. Chrome asks for permission on first use, so the preview requests access only when you press *Find MIDI devices*.
+
 The frontend lives in `src/YueToLogic.Api/ClientApp` and is delivered by the API under `/ui` (`/` redirects there). Node.js 22.12 or later is needed in addition to .NET.
 
 **Development:** one command starts everything:
@@ -248,5 +259,4 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 - **Fit tempo:** derive the tempo from the length of the `audio.flac` so that audio and MIDI stay together over the whole song. Today a difference is only reported (`YTL052`).
 - **Count-in bar** before bar 1, so there is a lead-in when playing the parts into hardware.
 - **Batch mode** for a folder of scores, since a YuE run usually leaves several takes.
-- **Score preview in the web interface:** `ScoreDocument` already serializes to JSON for exactly this; a piano roll with playback would show whether register, pattern and chords fit before the detour through Logic.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.

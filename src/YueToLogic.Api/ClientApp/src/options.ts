@@ -1,3 +1,4 @@
+import type { Routing } from './player'
 import type { BassPattern, ChordInversion, ChordPattern, ConversionOptions, DrumPattern, SwingUnit } from './types'
 
 /** What `--humanize 100` means in the CLI, so both hosts scatter the notes by the same amount. */
@@ -143,5 +144,45 @@ export function saveFormState(form: FormState): void {
     localStorage.setItem(storageKey, JSON.stringify(form))
   } catch {
     // Remembering the parameters is a convenience only.
+  }
+}
+
+const routingKey = 'yue-to-logic.routing'
+
+/**
+ * The preview's MIDI routing, kept per track name. A hardware setup has its instruments on fixed ports and
+ * channels; having to set them again on every reload would make the preview useless for that.
+ */
+export function loadRoutings(ids: string[], fallback: Routing[]): Routing[] {
+  try {
+    const stored = localStorage.getItem(routingKey)
+    if (stored) {
+      const saved = JSON.parse(stored) as Record<string, Routing>
+      return ids.map((id, index) => {
+        const entry = saved[id]
+        return entry && typeof entry.channel === 'number' && typeof entry.output === 'string'
+          ? { output: entry.output, channel: entry.channel, muted: Boolean(entry.muted) }
+          : fallback[index]!
+      })
+    }
+  } catch {
+    // Unavailable or corrupt storage: start from the defaults.
+  }
+  return fallback
+}
+
+export function saveRoutings(ids: string[], routings: Routing[]): void {
+  try {
+    const stored = localStorage.getItem(routingKey)
+    const saved = stored ? (JSON.parse(stored) as Record<string, Routing>) : {}
+    ids.forEach((id, index) => {
+      const routing = routings[index]
+      if (routing) {
+        saved[id] = routing
+      }
+    })
+    localStorage.setItem(routingKey, JSON.stringify(saved))
+  } catch {
+    // Remembering the routing is a convenience only.
   }
 }
