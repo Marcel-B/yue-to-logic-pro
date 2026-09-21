@@ -13,6 +13,24 @@ namespace YueToLogic.Api.Tests;
 
 public class ConvertEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
+    [Fact]
+    public async Task Fitting_the_tempo_and_a_count_in_reach_the_conversion()
+    {
+        // The sample is 8 bars at 88 BPM, which is 21.818 s.
+        const string options = """
+            {"arrangement":{"countIn":{"bars":2}},"fitTempo":{"audioSeconds":21.0}}
+            """;
+
+        var response = await _client.PostAsync("/api/convert", Form(SampleScore, options));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = JsonSerializer.Deserialize(await response.Content.ReadAsStringAsync(), YueToLogicJsonContext.Default.ConversionResult)!;
+        Assert.Equal(91.4286, result.Score!.TempoBpm, 4);
+        Assert.Equal(21.0, result.Score.MusicDurationSeconds, 3);
+        Assert.Equal(2 * 4 * 480, result.Score.CountInTicks);
+        Assert.Contains(result.Diagnostics, d => d.Code == DiagnosticCodes.TempoFitted);
+    }
+
     private static readonly string SampleScore = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Samples", "score.abc"));
 
     private readonly HttpClient _client = factory.CreateClient();

@@ -74,6 +74,15 @@ internal sealed record CliArguments
     /// <summary>One region per song section in the Logic project instead of one per track.</summary>
     public bool SplitSections { get; init; }
 
+    /// <summary>Silent bars in front of the song; 0 starts at bar 1.</summary>
+    public int CountIn { get; init; }
+
+    /// <summary>A click on every beat of the count-in.</summary>
+    public bool CountInClick { get; init; } = true;
+
+    /// <summary>Fits the tempo to the length of the audio given with <c>--logic</c>.</summary>
+    public bool FitTempo { get; init; }
+
     public bool Force { get; init; }
 
     public bool Verbose { get; init; }
@@ -286,6 +295,27 @@ internal sealed record CliArguments
                 case "--logic-split-sections":
                     result = result with { SplitSections = true };
                     break;
+                case "--count-in":
+                    if (!TryTakeValue(args, ref i, text, out var barsText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(barsText, NumberStyles.None, CultureInfo.InvariantCulture, out var bars)
+                        || bars > ConversionOptionsValidator.MaxCountInBars)
+                    {
+                        error = text.Format(text.InvalidCountIn, barsText, ConversionOptionsValidator.MaxCountInBars);
+                        return false;
+                    }
+
+                    result = result with { CountIn = bars };
+                    break;
+                case "--count-in-silent":
+                    result = result with { CountInClick = false, CountIn = result.CountIn == 0 ? 1 : result.CountIn };
+                    break;
+                case "--fit-tempo":
+                    result = result with { FitTempo = true };
+                    break;
                 case "-f" or "--force":
                     result = result with { Force = true };
                     break;
@@ -313,6 +343,12 @@ internal sealed record CliArguments
         if (input is null)
         {
             error = text.MissingInput;
+            return false;
+        }
+
+        if (result.FitTempo && result.LogicAudioPath is null)
+        {
+            error = text.FitTempoNeedsAudio;
             return false;
         }
 
@@ -363,6 +399,7 @@ internal sealed record CliArguments
                 }
                 : null,
             Mono = Mono ? new MonoOptions { Legato = Legato } : null,
+            CountIn = CountIn > 0 ? new CountInOptions { Bars = CountIn, Click = CountInClick } : null,
         };
     }
 

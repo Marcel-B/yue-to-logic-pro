@@ -32,6 +32,11 @@ export interface FormState {
   humanize: number
   mono: boolean
   legato: boolean
+  /** Silent bars in front of the song; 0 starts at bar 1. */
+  countIn: number
+  countInClick: boolean
+  /** Fit the tempo to the length of the chosen audio.flac. */
+  fitTempo: boolean
   /** One region per song section in the Logic project; used by the Logic export only. */
   splitSections: boolean
   ppq: number
@@ -59,11 +64,31 @@ export const defaultFormState = (): FormState => ({
   humanize: 0,
   mono: false,
   legato: false,
+  countIn: 0,
+  countInClick: true,
+  fitTempo: false,
   splitSections: false,
   ppq: 480,
 })
 
-export function toConversionOptions(form: FormState): ConversionOptions {
+/**
+ * The audio length the tempo fit is measured against. Only the 42-byte FLAC header is read, so choosing a
+ * 60 MB file costs nothing and nothing has to be uploaded for a MIDI-only conversion.
+ */
+export async function audioSeconds(file: File): Promise<number | null> {
+  const header = new Uint8Array(await file.slice(0, 42).arrayBuffer())
+  const view = new DataView(header.buffer)
+  if (header.length < 42 || String.fromCharCode(...header.subarray(0, 4)) !== 'fLaC' || (header[4]! & 0x7f) !== 0) {
+    return null
+  }
+  const body = header.subarray(8)
+  const rate = (body[10]! << 12) | (body[11]! << 4) | (body[12]! >> 4)
+  // The sample count is 36 bits: four in the low nibble of byte 13, then a big-endian 32-bit word.
+  const total = (body[13]! & 0x0f) * 2 ** 32 + view.getUint32(8 + 14)
+  return rate > 0 ? total / rate : null
+}
+
+export function toConversionOptions(form: FormState, audioLength: number | null = null): ConversionOptions {
   const octaveShifts: Record<string, number> = {}
   if (form.vocalOctave !== null) {
     octaveShifts.Vocal = form.vocalOctave
@@ -106,7 +131,9 @@ export function toConversionOptions(form: FormState): ConversionOptions {
             }
           : null,
       mono: form.mono ? { legato: form.legato } : null,
+      countIn: form.countIn > 0 ? { bars: form.countIn, click: form.countInClick } : null,
     },
+    fitTempo: form.fitTempo && audioLength !== null ? { audioSeconds: audioLength } : null,
   }
 }
 

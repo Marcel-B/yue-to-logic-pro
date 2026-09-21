@@ -22,6 +22,9 @@ internal sealed class CliText
     public required string InvalidChordVoicing { get; init; }
     public required string InvalidSwingUnit { get; init; }
     public required string InvalidPercent { get; init; }
+    public required string InvalidCountIn { get; init; }
+    public required string FitTempoNeedsAudio { get; init; }
+    public required string AudioUnreadable { get; init; }
     public required string InputNotFound { get; init; }
     public required string OutputExists { get; init; }
     public required string ReadFailed { get; init; }
@@ -105,6 +108,11 @@ internal sealed class CliText
                   --legato            As --mono, but every note also reaches to the next one
                   --logic-split-sections
                                       One region per song section in the Logic project, named after it
+                  --count-in <n>      Silent bars in front of the song (0 to 8), with a click on every beat
+                  --count-in-silent   No click in those bars; implies --count-in 1
+                  --fit-tempo         Adjust the tempo so the score lasts as long as the audio given with
+                                      --logic. A difference of more than 5 percent is reported instead,
+                                      because the recording was then probably cut short
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
                   --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
@@ -127,6 +135,9 @@ internal sealed class CliText
         InvalidChordVoicing = "Unknown chord voicing '{0}'; expected one of: {1}.",
         InvalidSwingUnit = "Unknown swing unit '{0}'; expected one of: {1}.",
         InvalidPercent = "Invalid {0} value '{1}'; expected a whole number between 0 and 100.",
+        InvalidCountIn = "Invalid --count-in value '{0}'; expected a whole number between 0 and {1}.",
+        FitTempoNeedsAudio = "--fit-tempo needs the recording to measure: pass it with --logic <audio.flac>.",
+        AudioUnreadable = "The audio file could not be read as FLAC: {0}",
         InputNotFound = "Input file not found: {0}",
         OutputExists = "Output file already exists: {0} (use --force to overwrite)",
         ReadFailed = "Could not read {0}: {1}",
@@ -196,6 +207,11 @@ internal sealed class CliText
                   --legato            Wie --mono, zusätzlich reicht jede Note bis zur nächsten
                   --logic-split-sections
                                       Im Logic-Projekt eine Region pro Songabschnitt, nach ihm benannt
+                  --count-in <n>      Stille Takte vor dem Song (0 bis 8), mit Klick auf jedem Schlag
+                  --count-in-silent   Kein Klick in diesen Takten; schließt --count-in 1 ein
+                  --fit-tempo         Tempo so anpassen, dass der Score so lang ist wie das mit --logic
+                                      angegebene Audio. Mehr als 5 Prozent Abweichung werden stattdessen
+                                      gemeldet, weil die Aufnahme dann vermutlich abgeschnitten ist
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
                   --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
@@ -218,6 +234,9 @@ internal sealed class CliText
         InvalidChordVoicing = "Unbekannte Akkordlage '{0}'; erlaubt sind: {1}.",
         InvalidSwingUnit = "Unbekannte Swing-Einheit '{0}'; erlaubt sind: {1}.",
         InvalidPercent = "Ungültiger Wert für {0}: '{1}'; erwartet wird eine ganze Zahl zwischen 0 und 100.",
+        InvalidCountIn = "Ungültiger Wert für --count-in: '{0}'; erwartet wird eine ganze Zahl zwischen 0 und {1}.",
+        FitTempoNeedsAudio = "--fit-tempo braucht die Aufnahme als Maß: mit --logic <audio.flac> angeben.",
+        AudioUnreadable = "Die Audiodatei konnte nicht als FLAC gelesen werden: {0}",
         InputNotFound = "Eingabedatei nicht gefunden: {0}",
         OutputExists = "Ausgabedatei existiert bereits: {0} (mit --force überschreiben)",
         ReadFailed = "{0} konnte nicht gelesen werden: {1}",

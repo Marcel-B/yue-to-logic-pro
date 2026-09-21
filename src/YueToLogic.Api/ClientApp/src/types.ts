@@ -101,5 +101,8 @@ export interface ConversionOptions {
       humanizeVelocity: number
     } | null
     mono: { legato: boolean } | null
+    countIn: { bars: number; click: boolean } | null
   }
+  /** Set by the client once an audio file is chosen; the length is read from its FLAC header. */
+  fitTempo: { audioSeconds: number } | null
 }

@@ -6,12 +6,14 @@ import ResultView from './components/ResultView.vue'
 import ScorePreview from './components/ScorePreview.vue'
 import FileDropZone from './components/FileDropZone.vue'
 import { locale, setLocale, t } from './i18n'
-import { clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
+import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
 import type { ConversionResult, Diagnostic } from './types'
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
+/** Length of the chosen audio.flac, read from its header; the tempo fit is measured against it. */
+const audioLength = ref<number | null>(null)
 const logicBusy = ref(false)
 const logicError = ref<string | null>(null)
 const logicWarnings = ref<Diagnostic[]>([])
@@ -45,10 +47,14 @@ function selectFile(selected: File): void {
   logicWarnings.value = []
 }
 
-function selectAudio(selected: File | null): void {
+async function selectAudio(selected: File | null): Promise<void> {
   audio.value = selected
   logicError.value = null
   logicWarnings.value = []
+  audioLength.value = selected ? await audioSeconds(selected) : null
+  if (audioLength.value === null) {
+    form.value.fitTempo = false
+  }
 }
 
 async function exportLogic(): Promise<void> {
@@ -63,7 +69,7 @@ async function exportLogic(): Promise<void> {
     const exported = await exportLogicProject(
       file.value,
       audio.value,
-      toConversionOptions(form.value),
+      toConversionOptions(form.value, audioLength.value),
       outputName.value,
       form.value.splitSections,
     )
@@ -88,6 +94,7 @@ function reset(): void {
   busy.value = false
   file.value = null
   audio.value = null
+  audioLength.value = null
   form.value = defaultFormState()
   clearFormState()
   outputName.value = 'score'
@@ -111,7 +118,7 @@ async function convert(): Promise<void> {
   error.value = null
 
   try {
-    result.value = await convertScore(file.value, toConversionOptions(form.value), controller.signal)
+    result.value = await convertScore(file.value, toConversionOptions(form.value, audioLength.value), controller.signal)
     stale.value = false
   } catch (caught) {
     if (caught instanceof DOMException && caught.name === 'AbortError') {
@@ -178,7 +185,7 @@ async function convert(): Promise<void> {
 
     <section class="card">
       <h2>{{ t('optionsTitle') }}</h2>
-      <OptionsForm v-model="form" />
+      <OptionsForm v-model="form" :has-audio="audioLength !== null" />
 
       <form class="submit" @submit.prevent="convert">
         <label>
