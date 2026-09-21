@@ -5,7 +5,9 @@ import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
 import ScorePreview from './components/ScorePreview.vue'
 import FileDropZone from './components/FileDropZone.vue'
+import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
+import { deletePreset, loadPresets, savePreset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
 import type { ConversionResult, Diagnostic } from './types'
@@ -14,6 +16,31 @@ const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
 /** Length of the chosen audio.flac, read from its header; the tempo fit is measured against it. */
 const audioLength = ref<number | null>(null)
+/** What came out of a dropped folder: nothing usable, or which of several songs was taken. */
+const folderNote = ref<string | null>(null)
+
+const presets = ref(loadPresets())
+/** The preset the form currently shows; empty once a preset is saved under a new name or none is chosen. */
+const presetName = ref('')
+const newPresetName = ref('')
+
+function applyPreset(): void {
+  const preset = presets.value.find((entry) => entry.name === presetName.value)
+  if (preset) {
+    form.value = { ...preset.form }
+  }
+}
+
+function storePreset(): void {
+  presets.value = savePreset(newPresetName.value, form.value)
+  presetName.value = newPresetName.value
+  newPresetName.value = ''
+}
+
+function removePreset(): void {
+  presets.value = deletePreset(presetName.value)
+  presetName.value = ''
+}
 const logicBusy = ref(false)
 const logicError = ref<string | null>(null)
 const logicWarnings = ref<Diagnostic[]>([])
@@ -57,6 +84,22 @@ async function selectAudio(selected: File | null): Promise<void> {
   }
 }
 
+/** A dropped YuE folder fills both files at once; with several songs in it the first one is taken. */
+async function selectSongs(songs: SongFolder[]): Promise<void> {
+  folderNote.value = null
+  if (songs.length === 0) {
+    folderNote.value = t('folderNoScore')
+    return
+  }
+
+  const song = songs[0]!
+  selectFile(song.score)
+  await selectAudio(song.audio)
+  if (songs.length > 1) {
+    folderNote.value = t('folderSongs').replace('{0}', String(songs.length)).replace('{1}', song.name)
+  }
+}
+
 async function exportLogic(): Promise<void> {
   if (!file.value) {
     return
@@ -94,8 +137,11 @@ function reset(): void {
   busy.value = false
   file.value = null
   audio.value = null
+  folderNote.value = null
   audioLength.value = null
   form.value = defaultFormState()
+  presetName.value = ''
+  newPresetName.value = ''
   clearFormState()
   outputName.value = 'score'
   result.value = null
@@ -163,9 +209,13 @@ async function convert(): Promise<void> {
           accept=".abc,text/plain,text/vnd.abc"
           :drop-hint="t('dropHint')"
           :wrong-type-hint="t('notAbc')"
+          folders
           @select="selectFile"
+          @songs="selectSongs"
           @clear="file = null"
         />
+        <p class="hint muted">{{ t('folderHint') }}</p>
+        <p v-if="folderNote" class="hint">{{ folderNote }}</p>
       </section>
 
       <section class="card">
@@ -184,7 +234,25 @@ async function convert(): Promise<void> {
     </div>
 
     <section class="card">
-      <h2>{{ t('optionsTitle') }}</h2>
+      <div class="options-head">
+        <h2>{{ t('optionsTitle') }}</h2>
+        <div class="presets">
+          <label>
+            <span class="sr-only">{{ t('presets') }}</span>
+            <select v-model="presetName" @change="applyPreset">
+              <option value="">{{ t('presetNone') }}</option>
+              <option v-for="preset in presets" :key="preset.name" :value="preset.name">{{ preset.name }}</option>
+            </select>
+          </label>
+          <input v-model.trim="newPresetName" type="text" :placeholder="t('presetName')" spellcheck="false" />
+          <button type="button" class="button secondary small" :disabled="!newPresetName" @click="storePreset">
+            {{ t('presetSave') }}
+          </button>
+          <button type="button" class="button secondary small" :disabled="!presetName" @click="removePreset">
+            {{ t('presetDelete') }}
+          </button>
+        </div>
+      </div>
       <OptionsForm v-model="form" :has-audio="audioLength !== null" />
 
       <form class="submit" @submit.prevent="convert">
@@ -279,6 +347,29 @@ h1 {
 main {
   display: grid;
   gap: 1rem;
+}
+
+.options-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.options-head h2 {
+  margin-bottom: 0;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.presets input {
+  width: 7rem;
 }
 
 /* Score and audio side by side; below a certain width each one takes the whole row. */

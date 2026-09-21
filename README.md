@@ -38,12 +38,14 @@ MIDI:        /…/score.mid
 | `--octave <n>` | Move both melodies by `n` octaves (−4 to 4) |
 | `--vocal-octave <n>`, `--ins-octave <n>` | Move only one melody; takes precedence over `--octave` |
 | `--bass` | Add a bass track (see below) |
-| `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`; implies `--bass` |
+| `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`, `walking`; implies `--bass` |
 | `--bass-octave <n>` | Move the bass by `n` octaves (−2 to 2); implies `--bass` |
 | `--drums` | Add a drum track (see below) |
-| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`, `half-time`, `disco`; implies `--drums` |
+| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; implies `--drums` |
 | `--no-crash` | No crash cymbal at the start of a section |
-| `--chord-pattern <p>` | How the chords are played: `block` (default, as written), `eighths`, `offbeat`, `arpeggio` |
+| `--chord-pattern <p>` | How the chords are played: `block` (default, as written), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
+| `--channel <track>=<n>` | Fixed MIDI channel 1–16 for a track (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); repeatable |
+| `--program <track>=<n>` | Program change 1–128 at the start of a track; repeatable |
 | `--chord-voicing <v>` | Inversion of the chords: `root` (default), `closest`, `first`, `second` (see below) |
 | `--chord-octave <n>` | Move the chord track by `n` octaves (−2 to 2) |
 | `--guide-tones` | Add a held track of every chord's third and seventh (see below) |
@@ -76,6 +78,10 @@ Preferably open the MIDI file with *File → Open*: Logic then creates a new pro
 ## Web interface
 
 A Vue frontend lets you drop a `score.abc` (or pick it with a file dialog), set the same parameters as the CLI, and download the MIDI file and the JSON dump. It also shows tempo, meter, key, length, the song sections and all diagnostics.
+
+Instead of two single files you can drop a **whole YuE output folder**, or open it with *Choose folder*: `score.abc` and `audio.flac` are looked for inside, one level down in `song1`, `song2` and so on as well. With several songs in the folder the first one is taken and the number of the others is reported.
+
+**Presets** above the parameter list save the whole set under a name and bring it back — for the combination of patterns, registers, groove and MIDI channels you usually work with. They live in the browser and survive *Reset*, which only clears the form.
 
 ### Preview
 

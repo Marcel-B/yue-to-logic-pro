@@ -38,12 +38,14 @@ MIDI:        /…/score.mid
 | `--octave <n>` | Beide Melodien um `n` Oktaven verschieben (−4 bis 4) |
 | `--vocal-octave <n>`, `--ins-octave <n>` | Nur eine Melodie verschieben; hat Vorrang vor `--octave` |
 | `--bass` | Bassspur hinzufügen (siehe unten) |
-| `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`; schließt `--bass` ein |
+| `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`, `walking`; schließt `--bass` ein |
 | `--bass-octave <n>` | Bass um `n` Oktaven verschieben (−2 bis 2); schließt `--bass` ein |
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
-| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`; schließt `--drums` ein |
+| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; schließt `--drums` ein |
 | `--no-crash` | Kein Crash-Becken zu Beginn eines Abschnitts |
-| `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `offbeat`, `arpeggio` |
+| `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
+| `--channel <spur>=<n>` | Fester MIDI-Kanal 1–16 für eine Spur (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); mehrfach möglich |
+| `--program <spur>=<n>` | Programmwechsel 1–128 zu Beginn einer Spur; mehrfach möglich |
 | `--chord-voicing <v>` | Lage der Akkorde: `root` (Standard), `closest`, `first`, `second` (siehe unten) |
 | `--chord-octave <n>` | Akkordspur um `n` Oktaven verschieben (−2 bis 2) |
 | `--guide-tones` | Liegende Spur aus Terz und Septime jedes Akkords hinzufügen (siehe unten) |
@@ -76,6 +78,10 @@ Die MIDI-Datei am besten über *Ablage → Öffnen* öffnen: Logic legt dann ein
 ## Weboberfläche
 
 Im Vue-Frontend zieht man eine `score.abc` hinein (oder wählt sie über den Dateidialog), stellt dieselben Parameter wie in der CLI ein und lädt MIDI-Datei und JSON-Dump herunter. Außerdem zeigt es Tempo, Taktart, Tonart, Länge, die Abschnitte des Songs und alle Meldungen.
+
+Statt zweier einzelner Dateien lässt sich auch der **ganze Ausgabeordner eines YuE-Laufs** ablegen oder über *Ordner auswählen* öffnen: Darin werden `score.abc` und `audio.flac` gesucht, auch eine Ebene tiefer in `song1`, `song2` und so weiter. Enthält der Ordner mehrere Songs, wird der erste genommen und die Zahl der übrigen gemeldet.
+
+**Voreinstellungen** über der Parameterliste sichern den ganzen Satz unter einem Namen und holen ihn wieder – für die Kombination aus Mustern, Oktavlagen, Groove und MIDI-Kanälen, mit der du üblicherweise arbeitest. Sie liegen im Browser und überstehen *Zurücksetzen*, das nur das Formular leert.
 
 ### Vorschau
 

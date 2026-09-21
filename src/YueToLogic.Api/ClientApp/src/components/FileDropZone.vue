@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { hasFolder, readSongFiles, readSongFolders, type SongFolder } from '../folder'
 import { t } from '../i18n'
 
 const props = defineProps<{
   file: File | null
+  /** Whether a whole YuE output folder can be dropped here, which fills score and audio at once. */
+  folders?: boolean
   /** Expected file extension, e.g. ".abc"; other files are accepted but flagged. */
   extension: string
   accept: string
   dropHint: string
   wrongTypeHint: string
 }>()
-const emit = defineEmits<{ select: [file: File]; clear: [] }>()
+const emit = defineEmits<{ select: [file: File]; songs: [songs: SongFolder[]]; clear: [] }>()
 
 const input = ref<HTMLInputElement | null>(null)
+const folderInput = ref<HTMLInputElement | null>(null)
 const dragDepth = ref(0)
 const dragging = computed(() => dragDepth.value > 0)
 const expectedType = computed(() => !props.file || props.file.name.toLowerCase().endsWith(props.extension))
@@ -21,19 +25,31 @@ function openDialog(): void {
   input.value?.click()
 }
 
+function openFolderDialog(): void {
+  folderInput.value?.click()
+}
+
 function onInput(event: Event): void {
   const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (file) {
-    emit('select', file)
+  const files = [...(target.files ?? [])]
+  if (target.webkitdirectory) {
+    emit('songs', readSongFiles(files))
+  } else if (files[0]) {
+    emit('select', files[0])
   }
   // Allows choosing the same file again after editing it on disk.
   target.value = ''
 }
 
-function onDrop(event: DragEvent): void {
+async function onDrop(event: DragEvent): Promise<void> {
   dragDepth.value = 0
-  const file = event.dataTransfer?.files[0]
+  const transfer = event.dataTransfer
+  if (props.folders && hasFolder(transfer)) {
+    emit('songs', await readSongFolders(transfer!))
+    return
+  }
+
+  const file = transfer?.files[0]
   if (file) {
     emit('select', file)
   }
@@ -63,6 +79,7 @@ function formatSize(bytes: number): string {
     @drop.prevent="onDrop"
   >
     <input ref="input" type="file" :accept="accept" hidden @change="onInput" />
+    <input v-if="folders" ref="folderInput" type="file" webkitdirectory hidden @change="onInput" />
 
     <template v-if="dragging">
       <p class="headline">{{ t('dropWhileDragging') }}</p>
@@ -81,7 +98,12 @@ function formatSize(bytes: number): string {
       </svg>
       <p class="headline">{{ dropHint }}</p>
       <p class="muted">{{ t('dropOr') }}</p>
-      <span class="button secondary">{{ t('chooseFile') }}</span>
+      <span class="links buttons">
+        <span class="button secondary">{{ t('chooseFile') }}</span>
+        <button v-if="folders" type="button" class="button secondary" @click.stop="openFolderDialog">
+          {{ t('chooseFolder') }}
+        </button>
+      </span>
     </template>
   </div>
   <p v-if="!expectedType" class="hint warning">{{ wrongTypeHint }}</p>
@@ -131,6 +153,13 @@ function formatSize(bytes: number): string {
 
 .muted {
   margin: 0;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .links {
