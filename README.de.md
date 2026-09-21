@@ -74,6 +74,17 @@ Die MIDI-Datei am besten über *Ablage → Öffnen* öffnen: Logic legt dann ein
 
 Im Vue-Frontend zieht man eine `score.abc` hinein (oder wählt sie über den Dateidialog), stellt dieselben Parameter wie in der CLI ein und lädt MIDI-Datei und JSON-Dump herunter. Außerdem zeigt es Tempo, Taktart, Tonart, Länge, die Abschnitte des Songs und alle Meldungen.
 
+### Vorschau
+
+Jede Konvertierung erscheint als Piano Roll: ein Taktlineal mit den Songabschnitten, die Akkordsymbole und eine Spur je Stimme, zoombar und scrollbar. Das beantwortet die Frage, die bei jedem Parameter wiederkommt – passt die Lage, passt das Muster, sitzen die Akkorde richtig – ohne den Umweg über Logic. Gezeichnet wird auf einem Canvas und nur der sichtbare Ausschnitt, damit auch ein Song mit mehreren tausend Noten flüssig scrollt.
+
+Die Vorschau spielt auch. Jede Spur wird einzeln geroutet, auf einen MIDI-Port mit Kanal oder auf den Ton des Browsers:
+
+- **MIDI** geht an echte Instrumente. Jede Spur hat eigenen Port und Kanal (1–16, wie am Gerät beschriftet), sodass sich ein Rack voller Synthesizer dort ansprechen lässt, wo jedes Gerät hört. Ein *Test*-Knopf je Spur schickt einen einzelnen Ton – der schnellste Weg, ein Verkabelungsproblem von einem Routing-Problem zu unterscheiden –, und *Panik* hebt auf allen Ausgängen jede Taste, falls ein Instrument hängenbleibt. Das Routing wird pro Spurname gemerkt, eine feste Aufstellung stellt man also einmal ein.
+- **Browser-Ton** braucht keine Hardware: ein Sägezahn mit Hüllkurve für die melodischen Spuren, gefiltertes Rauschen für das Schlagzeug. Ein grober Ersatz, der für Timing, Swing und Oktavlage reicht.
+
+Web MIDI gibt es nur über HTTPS oder auf localhost und nur in Browsern, die es umsetzen – Chrome ja, Safari nicht; dort bleibt es beim Browser-Ton. Chrome fragt beim ersten Mal nach Erlaubnis, deshalb fordert die Vorschau den Zugriff erst an, wenn du *MIDI-Geräte suchen* drückst.
+
 Das Frontend liegt in `src/YueToLogic.Api/ClientApp` und wird von der API unter `/ui` ausgeliefert (`/` leitet dorthin weiter). Zusätzlich zu .NET wird Node.js ab 22.12 benötigt.
 
 **Entwicklung:** Ein Befehl startet alles:
@@ -248,5 +259,4 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 - **Fit Tempo:** das Tempo aus der Länge der `audio.flac` ableiten, damit Audio und MIDI über den ganzen Song zusammenbleiben. Heute wird eine Abweichung nur gemeldet (`YTL052`).
 - **Count-in-Takt** vor Takt 1, damit beim Einspielen in Hardware ein Vorlauf da ist.
 - **Batch-/Ordner-Modus** für mehrere Scores, da ein YuE-Lauf meist mehrere Takes hinterlässt.
-- **Score-Vorschau in der Weboberfläche:** `ScoreDocument` wird genau dafür schon als JSON serialisiert; eine Piano-Roll mit Wiedergabe würde vor dem Umweg über Logic zeigen, ob Lage, Muster und Akkorde passen.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.
