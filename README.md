@@ -38,10 +38,25 @@ MIDI:        /…/score.mid
 | `--octave <n>` | Move both melodies by `n` octaves (−4 to 4) |
 | `--vocal-octave <n>`, `--ins-octave <n>` | Move only one melody; takes precedence over `--octave` |
 | `--bass` | Add a bass track (see below) |
-| `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`; implies `--bass` |
+| `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`; implies `--bass` |
 | `--bass-octave <n>` | Move the bass by `n` octaves (−2 to 2); implies `--bass` |
 | `--drums` | Add a drum track (see below) |
-| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`; implies `--drums` |
+| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`, `half-time`, `disco`; implies `--drums` |
+| `--no-crash` | No crash cymbal at the start of a section |
+| `--chord-pattern <p>` | How the chords are played: `block` (default, as written), `eighths`, `offbeat`, `arpeggio` |
+| `--chord-voicing <v>` | Inversion of the chords: `root` (default), `closest`, `first`, `second` (see below) |
+| `--chord-octave <n>` | Move the chord track by `n` octaves (−2 to 2) |
+| `--guide-tones` | Add a held track of every chord's third and seventh (see below) |
+| `--guide-octave <n>` | Move that track by `n` octaves (−2 to 2); implies `--guide-tones` |
+| `--double-vocal` | Double the vocal melody an octave below, on a track of its own |
+| `--double-octave <n>` | Octave of that copy (−2 to 2, default −1); implies `--double-vocal` |
+| `--swing <n>` | Swing in percent: `0` straight (default), `100` a full triplet feel |
+| `--swing-unit <u>` | Which subdivision swings: `eighths` (default), `sixteenths` |
+| `--straight-drums` | Keep the drums on the grid while everything else swings |
+| `--humanize <n>` | Scatter timing and velocity by `n` percent (0 default; 100 moves a note by up to 25 ms) |
+| `--mono` | Prepare the melodies for monophonic synthesizers (see below) |
+| `--legato` | As `--mono`, and every note reaches to the next one |
+| `--logic-split-sections` | One region per song section in the Logic project instead of one per track |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
 | `--logic-no-audio` | Also write a Logic Pro project without audio; its audio track stays empty |
@@ -84,7 +99,7 @@ If the frontend is built separately, for example in its own Docker stage, pass `
 |---|---|---|
 | `POST /api/convert` | multipart form: `file` (the score), optional `options` (JSON, see below) | `200` with score, diagnostics and `midi` (base64) as JSON; `422` with diagnostics if the score or options cannot be used; `400` for a missing file or malformed options |
 | `POST /api/convert/midi` | same | the MIDI file (`audio/midi`) |
-| `POST /api/convert/logic` | as above, with optional `audio` (the `audio.flac`, up to 250 MB) and `name` | a ZIP with `<name>.logicx`; warnings in the `X-YueToLogic-Diagnostics` header; `422` if the audio is not a 48 kHz FLAC |
+| `POST /api/convert/logic` | as above, with optional `audio` (the `audio.flac`, up to 250 MB), `name` and `splitSections` (`true` for one region per song section) | a ZIP with `<name>.logicx`; warnings in the `X-YueToLogic-Diagnostics` header; `422` if the audio is not a 48 kHz FLAC |
 | `GET /api/health` | – | `ok` |
 
 `options` is the JSON form of `ConversionOptions`; every field is optional:
@@ -98,10 +113,23 @@ If the frontend is built separately, for example in its own Docker stage, pass `
     "octaveShifts": { "Vocal": -1 },
     "bass": { "pattern": "Eighths", "octaveShift": 0 },
     "drums": { "pattern": "Backbeat", "crashOnSections": true },
-    "chords": { "pattern": "Offbeat", "octaveShift": 0 }
+    "chords": { "pattern": "Offbeat", "inversion": "Closest", "octaveShift": 0 },
+    "guideTones": { "octaveShift": 0, "velocity": 64 },
+    "doubling": { "voiceId": "Vocal", "semitones": -12, "velocity": 80 },
+    "groove": {
+      "swing": 0.55,
+      "swingUnit": "Eighths",
+      "humanizeTimingMs": 10,
+      "humanizeVelocity": 8,
+      "seed": 1,
+      "includeDrums": true
+    },
+    "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true }
   }
 }
 ```
+
+`splitSections` is a property of the Logic project rather than of the score, so it is its own form field instead of part of `options`.
 
 ```sh
 curl -F file=@score.abc -F 'options={"arrangement":{"drums":{}}}' http://localhost:5080/api/convert/midi -o score.mid
@@ -112,6 +140,8 @@ Clients served from another origin (for example an Electron shell) must be liste
 ## Logic Pro project (experimental)
 
 With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1, the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, the song sections as arrangement markers and every chord on Logic's chord track (which Session Players can follow), plus tempo, key, every meter change and the project length taken from the score. Without audio (CLI `--logic-no-audio`, web interface: simply leave the `audio.flac` out) you get the same project with an empty audio track, ready for the FLAC to be dropped onto later; the template's audio file object and its region are removed, as Logic would otherwise report a missing file when opening the project.
+
+With `--logic-split-sections` (web interface: *One region per section instead of one per track*) every track is cut at the section starts instead of running as one region: the regions are named after the section they cover, numbered when a name comes back (`Verse 1`, `Chorus 1`, `Verse 2`, …), so a section can be copied, looped, muted or moved on its own. A track the score has nothing for keeps its single empty region, and a note reaching past a section border keeps its length — the region grows with it rather than the note being cut. The audio stays one region at bar 1.
 
 Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter, markers, chords and audio are replaced; chord regions and marker names beyond the template's are added as new objects, registered the way Logic does it. The instruments chosen in that template are used for every project. The format was analysed and every change verified by opening, editing, saving and reopening the result in Logic. Limitations: the audio must be 48 kHz, and the chord scales offered to Session Players are a default per chord type. A future Logic version may need a newly saved template.
 
@@ -155,11 +185,19 @@ A Standard MIDI File, type 1:
 | `Conductor` | Tempo, meter, key and a marker for every section (`verse`, `chorus`, …); Logic puts these into its global tracks |
 | `Vocal` | The vocal melody |
 | `Ins` | The instrumental melody |
-| `Chords` | The chord symbols played as block chords (root in octave 3, slash bass below), plus the symbol as a text event. With `--chord-pattern` instead `eighths` (the whole chord on every eighth), `offbeat` (short chords on the off-beats only) or `arpeggio` (the chord notes one after another, in eighths, upwards) |
+| `Chords` | The chord symbols played as block chords (root in octave 3, slash bass below), plus the symbol as a text event. With `--chord-pattern` instead `eighths` (the whole chord on every eighth), `offbeat` (short chords on the off-beats only) or `arpeggio` (the chord notes one after another, in eighths, upwards). `--chord-voicing` picks the inversion: `first` and `second` are fixed, `closest` voices every chord where it lies nearest to the one before it, so the track stops jumping an octave at every change. Every voicing keeps its lowest chord tone inside one octave, so the track cannot drift out of its register |
 | `Bass` | Only with `--bass`: the bass note of every chord in the register E2–D♯3 (MIDI 40–51, in Logic's naming E1–D♯2), which every bass instrument can play; `--bass-octave -1` goes down to the lowest bass-guitar string. Slash chords such as `C/E` play their bass note. Notes are slightly detached, on-beat notes a little louder. `root-fifth` alternates quarter notes between bass note and the chord's fifth, `octaves` eighth notes with the octave above, `offbeat` plays the off-beat eighths only and `sustained` one long note per chord |
+| `Guide` | Only with `--guide-tones`: the third and the seventh of every chord, or its fifth when the chord has no seventh, held as long as the chords keep both notes. These are the two notes that tell a chord apart from its neighbours, which makes the track a pad or a string line while bass and drums carry the rhythm |
+| `Vocal 8vb` | Only with `--double-vocal`: the vocal melody again, an octave lower (or wherever `--double-octave` puts it), as a second part for another instrument |
 | `Drums` | Only with `--drums`: *four on the floor* plays the kick on every beat, *backbeat* on 1 and 3 with an open hi-hat on the last eighth (4+), *half-time* on 1 only with the snare on 3, *disco* on every beat with an open hi-hat on every off-beat. The others play the snare on 2 and 4, a closed hi-hat in eighth notes (off-beats softer) and a crash cymbal at the start of every section. General MIDI note numbers on channel 10, which Logic's drum kits understand. In 3/4 the snare plays on beat 2; 6/8 is counted in dotted quarters |
 
-The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"` or `"Drums"`. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
+`--swing` and `--humanize` apply to every track once it has been generated: swing delays the off-beat subdivisions and shortens them by the same amount, so the following note keeps its place, and humanization moves each note a little and varies its velocity. Both change the notes themselves rather than a playback setting, so the MIDI file, the JSON dump and the Logic project carry the same timing. Humanization is seeded, so the same score and options always give the same file.
+
+`--mono` prepares the melodic tracks (and the bass) for monophonic synthesizers, where three things otherwise get in the way: two notes sounding at once, which the synth answers by dropping one; notes that touch, where the envelope is never re-triggered and two notes come out as one long slide; and notes so short that a slow envelope never opens. It keeps one note at a time, leaves a short gap before the next attack and stretches the shortest notes. `--legato` additionally lets every note reach to the one after it, so the track becomes a continuous line of gates. The clean-up runs after the groove, so its guarantees also hold for what is finally written.
+
+The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` or `"Doubling"`. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
+
+The Logic template has five MIDI tracks, so the guide-tone and doubling tracks reach the MIDI file but not the Logic project; a warning (`YTL053`) says so. A template saved with tracks named `Guide` and `Vocal 8vb` takes them as well.
 
 ## The input format
 
@@ -207,4 +245,8 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
+- **Fit tempo:** derive the tempo from the length of the `audio.flac` so that audio and MIDI stay together over the whole song. Today a difference is only reported (`YTL052`).
+- **Count-in bar** before bar 1, so there is a lead-in when playing the parts into hardware.
+- **Batch mode** for a folder of scores, since a YuE run usually leaves several takes.
+- **Score preview in the web interface:** `ScoreDocument` already serializes to JSON for exactly this; a piano roll with playback would show whether register, pattern and chords fit before the detour through Logic.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.
