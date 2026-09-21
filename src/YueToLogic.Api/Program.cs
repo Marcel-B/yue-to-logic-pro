@@ -1,4 +1,5 @@
 using YueToLogic.Api;
+using YueToLogic.Api.Instruments;
 using YueToLogic.Core.Stems;
 
 const string CorsPolicy = "ConfiguredOrigins";
@@ -10,6 +11,16 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 
 builder.Services.AddYueToLogic();
+
+// The instruments (a name for a MIDI port and channel) and their tracks are the only state the app keeps: one
+// SQLite file, created when it is first needed. Data:Path (Data__Path in a container) says where; the default
+// suits development, the container image points it at its /data volume.
+var dataPath = builder.Configuration["Data:Path"];
+if (string.IsNullOrWhiteSpace(dataPath))
+{
+    dataPath = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "yue-to-logic.db");
+}
+builder.Services.AddSingleton<IInstrumentStore>(new SqliteInstrumentStore(dataPath));
 
 // Stem separation is optional: without an address and a key the endpoints answer that this server has none.
 var stems = builder.Configuration.GetSection("Stems");
@@ -30,7 +41,7 @@ builder.Services.AddOpenApi();
 // under Cors:AllowedOrigins. The bundled web frontend is served by this app itself and needs no entry.
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
-    policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST")
+    policy.WithOrigins(allowedOrigins).AllowAnyHeader().WithMethods("GET", "POST", "PUT", "DELETE")
         .WithExposedHeaders(ConvertEndpoints.DiagnosticsHeader, "Content-Disposition")));
 
 var app = builder.Build();
@@ -50,6 +61,7 @@ var api = app.MapGroup("/api");
 api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
 api.MapConvertEndpoints();
 api.MapStemEndpoints();
+api.MapInstrumentEndpoints();
 
 app.MapClientApp();
 

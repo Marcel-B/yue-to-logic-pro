@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { t } from '../i18n'
+import { effectiveRouting, instrumentOf } from '../instruments'
 import { loadRoutings, saveRoutings } from '../options'
 import {
   contentHeight,
@@ -27,9 +28,23 @@ import {
   type Routing,
 } from '../player'
 import { playableVoices } from '../score'
-import type { ScoreDocument } from '../types'
+import type { Assignments, Instrument, ScoreDocument } from '../types'
 
-const props = defineProps<{ score: ScoreDocument; includeChords: boolean; stale: boolean }>()
+const props = defineProps<{
+  score: ScoreDocument
+  includeChords: boolean
+  stale: boolean
+  /** The instrument library; with none the table offers ports and channels only. */
+  instruments: Instrument[]
+  /** Track name → instrument id, kept on the server by the app. */
+  assignments: Assignments
+}>()
+
+const emit = defineEmits<{
+  /** The user picked an instrument for a track, or none. */
+  assign: [track: string, instrumentId: number | null]
+  manageInstruments: []
+}>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const viewport = ref<HTMLDivElement | null>(null)
@@ -47,7 +62,15 @@ const voices = shallowRef(playableVoices(props.score, props.includeChords))
 const lanes = shallowRef(lanesOf(voices.value))
 
 const trackIds = computed(() => voices.value.map((voice) => voice.id))
+/** The routing chosen by hand per track; an instrument, where one is assigned, overrides it without touching it. */
 const routings = ref<Routing[]>(loadRoutings(trackIds.value, defaultRoutings(voices.value)))
+const hasInstruments = computed(() => props.instruments.length > 0)
+/** What the player uses: the instrument's port and channel where a track has one, the manual routing elsewhere. */
+const effective = computed(() =>
+  routings.value.map((routing, index) =>
+    effectiveRouting(routing, instrumentOf(trackIds.value[index]!, props.assignments, props.instruments), ports.value),
+  ),
+)
 
 const pool = new OutputPool(null)
 const channels = Array.from({ length: 16 }, (_, index) => index)
@@ -121,7 +144,7 @@ function release(): void {
 
 function play(fromTicks = playhead.value ?? 0): void {
   if (!player) {
-    player = createPlayer(scheduleOf(props.score, voices.value, routings.value), pool, () => {
+    player = createPlayer(scheduleOf(props.score, voices.value, effective.value.map((entry) => entry.routing)), pool, () => {
       playing.value = false
       playhead.value = null
       render()
@@ -258,19 +281,25 @@ watch(
   },
 )
 
-// Re-routing rebuilds the schedule; playback picks up where it was rather than jumping back to the start.
+watch(routings, (value) => saveRoutings(trackIds.value, value), { deep: true })
+
+// Re-routing - by hand, by instrument or by a port coming or going - rebuilds the schedule; playback picks up
+// where it was rather than jumping back to the start. Compared as text, so a refreshed port list alone changes nothing.
 watch(
-  routings,
-  (value) => {
-    saveRoutings(trackIds.value, value)
+  () => JSON.stringify(effective.value.map((entry) => entry.routing)),
+  () => {
     const resume = playing.value ? (playhead.value ?? 0) : null
     release()
     if (resume !== null) {
       play(resume)
     }
   },
-  { deep: true },
 )
+
+function assign(track: string, event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  emit('assign', track, value === '' ? null : Number(value))
+}
 
 // Zooming keeps the bar at the left edge in place; the raw scroll offset would otherwise jump to a
 // different part of the song every time the scale changes.
@@ -332,6 +361,9 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
         <button v-if="canAskForMidi" type="button" class="button secondary small" @click="loadPorts">
           {{ t('previewFindMidi') }}
         </button>
+        <button type="button" class="button secondary small" @click="emit('manageInstruments')">
+          {{ t('instrumentsManage') }}
+        </button>
         <label class="field">
           {{ t('previewRouteAll') }}
           <select @change="routeAll(($event.target as HTMLSelectElement).value)">
@@ -346,6 +378,7 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
         <thead>
           <tr>
             <th>{{ t('previewTrack') }}</th>
+            <th v-if="hasInstruments">{{ t('previewInstrument') }}</th>
             <th>{{ t('previewOutput') }}</th>
             <th>{{ t('previewChannel') }}</th>
             <th><span class="sr-only">{{ t('previewTest') }}</span></th>
@@ -360,22 +393,35 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
                 {{ trackIds[index] }}
               </label>
             </td>
-            <td>
-              <select v-model="routing.output">
-                <option :value="AUDIO_OUTPUT">{{ t('previewOutputAudio') }}</option>
-                <option v-for="port in ports" :key="port.id" :value="port.id">{{ port.name }}</option>
+            <td v-if="hasInstruments" class="instrument">
+              <select :value="effective[index]?.instrument?.id ?? ''" @change="assign(trackIds[index]!, $event)">
+                <option value="">{{ t('previewInstrumentNone') }}</option>
+                <option v-for="instrument in instruments" :key="instrument.id" :value="instrument.id">{{ instrument.name }}</option>
               </select>
             </td>
-            <td>
-              <select v-model.number="routing.channel" :disabled="routing.output === AUDIO_OUTPUT">
-                <option v-for="channel in channels" :key="channel" :value="channel">{{ channel + 1 }}</option>
-              </select>
-            </td>
+            <template v-if="effective[index]?.instrument">
+              <td v-if="effective[index]?.port" class="fixed">{{ effective[index]?.port?.name }}</td>
+              <td v-else class="fixed warning">{{ t('previewInstrumentMissing', { port: effective[index]?.instrument?.port ?? '' }) }}</td>
+              <td class="channel fixed">{{ effective[index]!.routing.channel + 1 }}</td>
+            </template>
+            <template v-else>
+              <td>
+                <select v-model="routing.output">
+                  <option :value="AUDIO_OUTPUT">{{ t('previewOutputAudio') }}</option>
+                  <option v-for="port in ports" :key="port.id" :value="port.id">{{ port.name }}</option>
+                </select>
+              </td>
+              <td class="channel">
+                <select v-model.number="routing.channel" :disabled="routing.output === AUDIO_OUTPUT">
+                  <option v-for="channel in channels" :key="channel" :value="channel">{{ channel + 1 }}</option>
+                </select>
+              </td>
+            </template>
             <td>
               <button
                 type="button"
                 class="button secondary small"
-                @click="testTone(pool, routing, voices[index]?.kind === 'Drums')"
+                @click="testTone(pool, effective[index]!.routing, voices[index]?.kind === 'Drums')"
               >
                 {{ t('previewTest') }}
               </button>
@@ -385,7 +431,7 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
       </table>
     </details>
 
-    <p class="muted hint">{{ note ?? t('previewHint') }}</p>
+    <p class="muted hint">{{ note ?? (hasInstruments ? t('previewInstrumentHint') : t('previewHint')) }}</p>
   </section>
 </template>
 
@@ -506,8 +552,18 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
   min-width: 0;
 }
 
-.routing td:nth-child(3) select {
+.routing td.channel select {
   width: 4.5rem;
+}
+
+.routing td.fixed {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.routing td.warning {
+  color: var(--warning-text);
+  white-space: normal;
 }
 
 .preview.large {

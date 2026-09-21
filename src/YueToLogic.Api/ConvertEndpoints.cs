@@ -51,7 +51,7 @@ public static class ConvertEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes + MaxScoreBytes + 64 * 1024))
             .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes)
             .WithName("ConvertToLogic")
-            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section, 'stemJob' puts the stems of a finished separation on their own audio tracks.");
+            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section, 'stemJob' puts the stems of a finished separation on their own audio tracks, 'instruments' (JSON: track name → name, port, channel) puts each track on its instrument's channel and names it after both.");
 
         return api;
     }
@@ -63,6 +63,7 @@ public static class ConvertEndpoints
         [FromForm] string? name,
         [FromForm] bool? splitSections,
         [FromForm] Guid? stemJob,
+        [FromForm] string? instruments,
         IScoreConverter converter,
         ILogicProjectWriter writer,
         IServiceProvider services,
@@ -78,6 +79,12 @@ public static class ConvertEndpoints
         if (problem is not null)
         {
             return problem;
+        }
+
+        var (logicInstruments, invalidInstruments) = ParseInstruments(instruments);
+        if (invalidInstruments is not null)
+        {
+            return invalidInstruments;
         }
 
         if (!result!.Success)
@@ -114,6 +121,7 @@ public static class ConvertEndpoints
                     ProjectName = packageName,
                     SplitRegionsAtSections = splitSections ?? false,
                     Channels = parsed.MidiChannels,
+                    Instruments = logicInstruments,
                 };
                 var logicAudio = new LogicAudio(audioStream, stems?.Vocals, stems?.VocalsDry);
                 logic = await writer.WriteAsync(result.Score!, logicAudio, sink, logicOptions, cancellationToken);
@@ -151,6 +159,43 @@ public static class ConvertEndpoints
 
         zip.Position = 0;
         return Results.File(zip, "application/zip", $"{packageName}.logicx.zip");
+    }
+
+    /// <summary>
+    /// The instruments the tracks play, from the form field of that name: track name → name, port and channel
+    /// as JSON. The browser sends what its routing table shows, so the export needs no look into the store.
+    /// </summary>
+    private static (IReadOnlyDictionary<string, LogicInstrument> Instruments, IResult? Problem) ParseInstruments(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return (new Dictionary<string, LogicInstrument>(), null);
+        }
+
+        Dictionary<string, LogicInstrument>? instruments;
+        try
+        {
+            instruments = JsonSerializer.Deserialize(json, YueToLogicJsonContext.Default.DictionaryStringLogicInstrument);
+        }
+        catch (JsonException ex)
+        {
+            return (new Dictionary<string, LogicInstrument>(), BadRequest("Invalid instruments", $"Form field 'instruments' is not valid JSON: {ex.Message}"));
+        }
+
+        foreach (var (track, instrument) in instruments ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(instrument.Name))
+            {
+                return (new Dictionary<string, LogicInstrument>(), BadRequest("Invalid instruments", $"The instrument of track '{track}' has no name."));
+            }
+
+            if (instrument.Channel is not (>= 1 and <= 16))
+            {
+                return (new Dictionary<string, LogicInstrument>(), BadRequest("Invalid instruments", $"The channel of track '{track}' must be between 1 and 16, not {instrument.Channel}."));
+            }
+        }
+
+        return (instruments ?? [], null);
     }
 
     /// <summary>A safe file name from the requested name, else from the score's file name.</summary>

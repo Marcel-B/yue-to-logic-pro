@@ -487,3 +487,6 @@ src/YueToLogic.Api/ClientApp/dist/
 
 # Local deployment settings (template: deploy/.env.example)
 deploy/.env
+
+# Local instrument library (SQLite) of a development run
+**/App_Data/

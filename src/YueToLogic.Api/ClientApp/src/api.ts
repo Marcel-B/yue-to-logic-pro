@@ -1,4 +1,13 @@
-import type { ConversionOptions, ConversionResult, Diagnostic, StemJob } from './types'
+import type {
+  Assignments,
+  ConversionOptions,
+  ConversionResult,
+  Diagnostic,
+  Instrument,
+  InstrumentInput,
+  LogicInstrument,
+  StemJob,
+} from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? ''
 
@@ -63,6 +72,8 @@ export async function exportLogicProject(
   splitSections: boolean,
   /** A finished stem job, whose stems the server then puts on the project's own audio tracks. */
   stemJob: string | null,
+  /** The instrument each track plays; the track then sits on its channel and is named after it. */
+  instruments: Record<string, LogicInstrument> = {},
   signal?: AbortSignal,
 ): Promise<LogicExport> {
   const form = new FormData()
@@ -75,6 +86,9 @@ export async function exportLogicProject(
   form.append('splitSections', String(splitSections))
   if (stemJob) {
     form.append('stemJob', stemJob)
+  }
+  if (Object.keys(instruments).length > 0) {
+    form.append('instruments', JSON.stringify(instruments))
   }
 
   let response: Response
@@ -118,7 +132,7 @@ export async function stemsAvailable(): Promise<boolean> {
 
 /** Hands the recording over; the separation then runs for minutes on the stem service. */
 export async function startStemJob(audio: File, dereverb: boolean, signal?: AbortSignal): Promise<StemJob> {
-  return (await stemRequest(`/api/stems?dereverb=${dereverb}`, {
+  return (await request(`/api/stems?dereverb=${dereverb}`, {
     method: 'POST',
     body: audio,
     headers: { 'Content-Type': 'audio/flac' },
@@ -127,19 +141,52 @@ export async function startStemJob(audio: File, dereverb: boolean, signal?: Abor
 }
 
 export async function stemJobStatus(id: string, signal?: AbortSignal): Promise<StemJob> {
-  return (await stemRequest(`/api/stems/${id}`, { signal })).json() as Promise<StemJob>
+  return (await request(`/api/stems/${id}`, { signal })).json() as Promise<StemJob>
 }
 
 export async function downloadStems(id: string): Promise<Blob> {
-  return (await stemRequest(`/api/stems/${id}/result`)).blob()
+  return (await request(`/api/stems/${id}/result`)).blob()
 }
 
 /** Confirms the import, whereupon the stem service drops the result. Failure here is not worth reporting. */
 export async function confirmStems(id: string): Promise<void> {
-  await stemRequest(`/api/stems/${id}`, { method: 'DELETE' }).catch(() => undefined)
+  await request(`/api/stems/${id}`, { method: 'DELETE' }).catch(() => undefined)
 }
 
-async function stemRequest(path: string, init: RequestInit = {}): Promise<Response> {
+// ---- Instruments -------------------------------------------------------------------------------
+
+export async function listInstruments(): Promise<Instrument[]> {
+  return (await request('/api/instruments')).json() as Promise<Instrument[]>
+}
+
+export async function createInstrument(input: InstrumentInput): Promise<Instrument> {
+  return (await request('/api/instruments', json('POST', input))).json() as Promise<Instrument>
+}
+
+export async function updateInstrument(id: number, input: InstrumentInput): Promise<Instrument> {
+  return (await request(`/api/instruments/${id}`, json('PUT', input))).json() as Promise<Instrument>
+}
+
+/** Removes the instrument; the server drops the assignments of tracks to it as well. */
+export async function deleteInstrument(id: number): Promise<void> {
+  await request(`/api/instruments/${id}`, { method: 'DELETE' })
+}
+
+export async function listAssignments(): Promise<Assignments> {
+  return (await request('/api/instruments/assignments')).json() as Promise<Assignments>
+}
+
+/** Gives a track an instrument, or takes it away with `null`. */
+export async function assignInstrument(track: string, instrumentId: number | null): Promise<void> {
+  await request(`/api/instruments/assignments/${encodeURIComponent(track)}`, json('PUT', { instrumentId }))
+}
+
+function json(method: string, body: unknown): RequestInit {
+  return { method, body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }
+}
+
+/** A request whose failure is worth an ApiError: a problem document's detail, or the status. */
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
   let response: Response
   try {
     response = await fetch(`${apiBase}${path}`, init)

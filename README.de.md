@@ -97,6 +97,8 @@ Die Vorschau spielt auch. Jede Spur wird einzeln geroutet, auf einen MIDI-Port m
 
 Web MIDI gibt es nur über HTTPS oder auf localhost und nur in Browsern, die es umsetzen – Chrome ja, Safari nicht; dort bleibt es beim Browser-Ton. Chrome fragt beim ersten Mal nach Erlaubnis, deshalb fordert die Vorschau den Zugriff erst an, wenn du *MIDI-Geräte suchen* drückst.
 
+**Instrumente** ersparen das Eintragen von Port und Kanal ganz. Unter *Instrumente …* (in der Kopfzeile, also auch ohne geladenen Score) bekommt jeder Synthesizer einen Namen für seinen Port und Kanal – „WASP Deluxe“ für „Scarlett 8i6 USB“, Kanal 1, „Mother32“ für „MIDI4x4 Midi Out 1“, Kanal 12. Die Routing-Tabelle erhält dann eine Spalte *Instrument*: Eines wählen, und die Spur geht auf dessen Port und Kanal; keines wählen, und die Auswahl von Port und Kanal ist wieder da. Instrumente und Zuordnung der Spuren liegen auf dem Server, jeder Browser sieht also dieselbe Aufstellung; die Ports sind nach Namen gespeichert, sodass ein Instrument, dessen Interface gerade nicht angeschlossen ist, seinen Eintrag behält und bis dahin über den Browser-Ton spielt. Die Wahl geht auch in die Downloads ein: MIDI-Datei und Logic-Projekt legen die Spur auf den Kanal des Instruments, und die Logic-Spur heißt nach beidem (*Bass · Mother32*).
+
 Das Frontend liegt in `src/YueToLogic.Api/ClientApp` und wird von der API unter `/ui` ausgeliefert (`/` leitet dorthin weiter). Zusätzlich zu .NET wird Node.js ab 22.12 benötigt.
 
 **Entwicklung:** Ein Befehl startet alles:
@@ -122,7 +124,7 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
 |---|---|---|
 | `POST /api/convert` | Multipart-Formular: `file` (der Score), optional `options` (JSON, siehe unten) | `200` mit Score, Meldungen und `midi` (Base64) als JSON; `422` mit Meldungen, wenn Score oder Optionen unbrauchbar sind; `400` bei fehlender Datei oder fehlerhaften Optionen |
 | `POST /api/convert/midi` | wie oben | die MIDI-Datei (`audio/midi`) |
-| `POST /api/convert/logic` | wie oben, optional `audio` (die `audio.flac`, bis 250 MB), `name` und `splitSections` (`true` für eine Region pro Songabschnitt) | ein ZIP mit `<name>.logicx`; Hinweise im Header `X-YueToLogic-Diagnostics`; `422`, wenn das Audio kein FLAC mit 48 kHz ist |
+| `POST /api/convert/logic` | wie oben, optional `audio` (die `audio.flac`, bis 250 MB), `name`, `splitSections` (`true` für eine Region pro Songabschnitt) und `instruments` (JSON: Spurname → `{ "name", "port", "channel" }`, siehe [Instrumente](#instrumente)) | ein ZIP mit `<name>.logicx`; Hinweise im Header `X-YueToLogic-Diagnostics`; `422`, wenn das Audio kein FLAC mit 48 kHz ist |
 | `GET /api/health` | – | `ok` |
 
 `options` ist die JSON-Form von `ConversionOptions`; jedes Feld ist optional:
@@ -170,7 +172,7 @@ Mit `--logic-split-sections` (Weboberfläche: *Eine Region pro Abschnitt statt e
 
 Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus einer von Logic Pro 12.3 gespeicherten Vorlage (`src/YueToLogic.Core/Logic/Template`), in der Noten, Längen, Tempo, Taktart, Marker, Akkorde und Audio ersetzt werden; Akkordregionen und Markernamen über die der Vorlage hinaus werden als neue Objekte angelegt und so registriert, wie Logic es selbst tut. Die in der Vorlage gewählten Instrumente gelten für jedes Projekt. Das Format wurde analysiert und jede Änderung durch Öffnen, Bearbeiten, Speichern und erneutes Öffnen in Logic geprüft. Grenzen: Das Audio muss 48 kHz haben, und die Akkordskalen für die Session Player sind ein Standard je Akkordart. Eine künftige Logic-Version kann eine neu gespeicherte Vorlage erfordern.
 
-Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` –, und nicht nach dem Instrument, das die Vorlage zufällig verwendet, denn die Regionen tragen inzwischen die Abschnittsnamen. Logic führt den Spurnamen am Kanalzug, dieser wird also umbenannt; Audiospur und Stereo-Summe behalten ihren.
+Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` –, und nicht nach dem Instrument, das die Vorlage zufällig verwendet, denn die Regionen tragen inzwischen die Abschnittsnamen. Logic führt den Spurnamen am Kanalzug, dieser wird also umbenannt; Audiospur und Stereo-Summe behalten ihren. Eine Spur mit [Instrument](#instrumente) heißt nach beidem, *Bass · Mother32*, und ihre Noten tragen den Kanal des Instruments, sodass ein External Instrument auf dieser Spur den Synthesizer ohne weitere Einstellung erreicht. Den Port selbst ins Projekt zu schreiben ist der nächste Schritt; dafür braucht es ein von Logic gespeichertes Projekt mit einer solchen Spur, um das Format daraus zu lernen.
 
 **Eigene Klänge und weitere Spuren.** Welche Spuren ein Projekt hat, gibt die Vorlage vor – eine dort ergänzte Spur ist überall vorhanden. Konvertiere den Score einmal mit den gewünschten Spuren (`--guide-tones`, `--double-vocal`), öffne die MIDI-Datei in Logic (*Ablage → Öffnen*), das die Spuren danach benennt, und baue die Vorlage daraus: `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln). Eine Spur wird über ihren Namen einer Stimme zugeordnet, die Namen aus der MIDI-Datei also beibehalten. Womit die Vorlage klingt, ist gleichgültig: Gesampelte Instrumente und Hall mit Impulsantworten merken sich, wo ihre Dateien lagen, aber jedes erzeugte Projekt wird von diesen Pfaden befreit – Logic findet seine eigenen Inhalte selbst.
 
@@ -192,6 +194,23 @@ Die Stems müssen dafür nicht durch den Browser: Beim Logic-Export genügt das 
 
 Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `Stems__BaseUrl` und `Stems__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt den Bereich gar nicht erst an. Läuft der Gateway im selben Docker-Host, ist `http://stemmywav:8080` die Adresse; dafür muss dieses Compose-Projekt dessen Netz beitreten (in [`deploy/compose.yml`](deploy/compose.yml) auskommentiert vorbereitet).
 
+## Instrumente
+
+Ein Instrument ist ein Name für einen MIDI-Ausgang und Kanal: Dorthin routet die [Vorschau](#vorschau) die Spuren, und darauf legen die Exporte sie. Die Liste und die Zuordnung der Spuren sind der einzige Zustand, den die Anwendung hält, in einer SQLite-Datei:
+
+| Endpunkt | Anfrage | Antwort |
+|---|---|---|
+| `GET /api/instruments` | – | `[{ "id": 1, "name": "Mother32", "port": "MIDI4x4 Midi Out 1", "channel": 12 }]`, nach Namen sortiert |
+| `POST /api/instruments` | `{ "name", "port", "channel" }` (Kanal 1–16) | `201` mit dem Instrument; `400` mit dem, was fehlt; `409`, wenn der Name vergeben ist |
+| `PUT /api/instruments/{id}` | dasselbe | `200` mit dem Instrument; `404`, `400`, `409` wie oben |
+| `DELETE /api/instruments/{id}` | – | `204`; Spuren, die es spielten, verlieren die Zuordnung |
+| `GET /api/instruments/assignments` | – | `{ "Bass": 1, "Vocal 8vb": 2 }` (Spurname → Instrument-Id) |
+| `PUT /api/instruments/assignments/{track}` | `{ "instrumentId": 1 }` oder `null` zum Entfernen | `204`; `404` bei unbekanntem Instrument |
+
+Der Port ist der Name, den Web MIDI im Browser meldet – auf dem Mac der CoreMIDI-Anzeigename, Gerät und Port zusammen („MIDI4x4 Midi Out 1“) oder nur der eine Name, wenn beide gleich sind („Scarlett 8i6 USB“).
+
+Wo die Datei liegt, bestimmt `Data:Path` (im Container `Data__Path`); leer heißt `App_Data/yue-to-logic.db` neben der Anwendung, so läuft es in der Entwicklung. Datei und Tabellen entstehen bei der ersten Benutzung, sodass ein Server mit nicht beschreibbarem Datenverzeichnis trotzdem konvertiert – nur die Instrument-Endpunkte schlagen fehl, und die Oberfläche sagt das und arbeitet ohne Instrumente weiter.
+
 ## Container und Deployment
 
 Die CI baut ein Container-Image mit API und Weboberfläche und pusht es in die GitHub Container Registry, sobald Tests und Publish grün sind:
@@ -202,12 +221,12 @@ Die CI baut ein Container-Image mit API und Weboberfläche und pusht es in die G
 | `…:sha-3f2c1ab` | ein bestimmter Commit |
 | `…:1.2.0`, `…:1.2` | ein Release, erzeugt durch einen Tag: `git tag v1.2.0 && git push origin v1.2.0` |
 
-Das Image lauscht auf Port 8080, läuft als unprivilegierter Benutzer und speichert keinen Zustand. Lokal ausprobieren: `docker build -t yue-to-logic . && docker run --rm -p 8080:8080 yue-to-logic`, dann <http://localhost:8080> öffnen.
+Das Image lauscht auf Port 8080, läuft als unprivilegierter Benutzer und hält seinen einzigen Zustand, die [Instrumente](#instrumente), im Volume `/data` (`Data__Path=/data/yue-to-logic.db`). Lokal ausprobieren: `docker build -t yue-to-logic . && docker run --rm -p 8080:8080 -v yue-to-logic-data:/data yue-to-logic`, dann <http://localhost:8080> öffnen.
 
 ### Proxmox-Container mit Docker Compose
 
 1. **Container:** ein Debian-LXC-Container. Für Docker in einem unprivilegierten Container unter *Optionen → Features* die Punkte *nesting* und *keyctl* aktivieren. Docker Engine mit Compose-Plugin nach <https://docs.docker.com/engine/install/debian/> installieren.
-2. **Dateien:** [`deploy/compose.yml`](deploy/compose.yml) und [`deploy/.env.example`](deploy/.env.example) z. B. nach `/opt/yue-to-logic/` kopieren, `.env.example` in `.env` umbenennen und anpassen.
+2. **Dateien:** [`deploy/compose.yml`](deploy/compose.yml) und [`deploy/.env.example`](deploy/.env.example) z. B. nach `/opt/yue-to-logic/` kopieren, `.env.example` in `.env` umbenennen und anpassen. Die Instrumente landen im Docker-Volume `yue-to-logic_data`, das Updates übersteht; `DATA_DIR` legt sie stattdessen in ein Host-Verzeichnis, das dann dem Benutzer der App gehören muss (`chown 1654:1654`) und keine Netzfreigabe sein darf, weil SQLite auf Dateisperren angewiesen ist.
 3. **Starten:** `docker compose pull && docker compose up -d`, prüfen mit `curl http://localhost:8080/api/health` (Antwort `ok`).
 4. **Nginx Proxy Manager:** *Hosts → Proxy Hosts → Add Proxy Host*
    - *Details:* Domain Names `music.idsrv.info`, Scheme `http`, Forward Hostname/IP = IP des Containers, Forward Port `8080`, *Block Common Exploits* an.
@@ -281,6 +300,7 @@ src/YueToLogic.Cli/     Kommandozeilenwerkzeug (yue2logic)
   Logic/                Logic-Pro-Projekt-Writer und eingebettete Vorlage
 src/YueToLogic.Api/     ASP.NET-Core-API; liefert das Web-Frontend unter /ui aus
   ClientApp/            Vue-3-Frontend mit Vite und TypeScript
+  Instruments/          Die Instrumente in SQLite (der einzige Zustand des Servers)
 deploy/                 Docker-Compose-Setup für den Server
 Dockerfile              Container-Image (API + Frontend)
 tests/                  xUnit-Tests
@@ -315,5 +335,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
+- **Instrument-Ports im Logic-Projekt:** ein External Instrument je Spur, auf Port und Kanal des Instruments gestellt, damit das Projekt die Hardware spielt, sobald es aufgeht. Braucht ein von Logic gespeichertes Projekt mit einer solchen Spur, um zu lernen, wo der Port abgelegt ist.
 - **Mehrere Songs eines Laufs** zur Auswahl stellen, statt stillschweigend den ersten zu nehmen.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.
