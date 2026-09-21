@@ -118,7 +118,11 @@ async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPat
             score,
             audio,
             new DirectoryLogicPackageSink(packagePath),
-            new LogicProjectOptions { ProjectName = Path.GetFileNameWithoutExtension(packagePath) });
+            new LogicProjectOptions
+            {
+                ProjectName = Path.GetFileNameWithoutExtension(packagePath),
+                SplitRegionsAtSections = options.SplitSections,
+            });
         PrintDiagnostics(logic.Diagnostics);
         if (!logic.Success)
         {

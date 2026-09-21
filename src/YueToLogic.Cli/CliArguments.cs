@@ -2,6 +2,7 @@ using System.Globalization;
 using YueToLogic.Core.Abc;
 using YueToLogic.Core.Arrangement;
 using YueToLogic.Core.Conversion;
+using YueToLogic.Core.Harmony;
 
 namespace YueToLogic.Cli;
 
@@ -38,6 +39,40 @@ internal sealed record CliArguments
 
     /// <summary>How the chord symbols are played; without it they sound as written, as block chords.</summary>
     public ChordPattern? Chords { get; init; }
+
+    /// <summary>Inversion the chord track is voiced in; without it every chord stands on its root.</summary>
+    public ChordInversion? Inversion { get; init; }
+
+    public int ChordOctave { get; init; }
+
+    /// <summary>Crash cymbal at the start of every section; only has an effect together with a drum track.</summary>
+    public bool Crash { get; init; } = true;
+
+    public bool GuideTones { get; init; }
+
+    public int GuideOctave { get; init; }
+
+    public bool DoubleVocal { get; init; }
+
+    public int DoubleOctave { get; init; } = -1;
+
+    /// <summary>Swing in percent: 0 straight, 100 a full triplet feel.</summary>
+    public int SwingPercent { get; init; }
+
+    public SwingUnit SwingUnit { get; init; } = SwingUnit.Eighths;
+
+    /// <summary>Keeps the drums on the grid while everything else swings.</summary>
+    public bool StraightDrums { get; init; }
+
+    /// <summary>Humanization in percent of <see cref="MaxHumanizeTimingMs"/> and <see cref="MaxHumanizeVelocity"/>.</summary>
+    public int HumanizePercent { get; init; }
+
+    public bool Mono { get; init; }
+
+    public bool Legato { get; init; }
+
+    /// <summary>One region per song section in the Logic project instead of one per track.</summary>
+    public bool SplitSections { get; init; }
 
     public bool Force { get; init; }
 
@@ -101,13 +136,21 @@ internal sealed record CliArguments
 
                     result = result with { TicksPerQuarterNote = ppq };
                     break;
-                case "--octave" or "--vocal-octave" or "--ins-octave" or "--bass-octave":
+                case "--octave" or "--vocal-octave" or "--ins-octave" or "--bass-octave"
+                    or "--chord-octave" or "--guide-octave" or "--double-octave":
                     if (!TryTakeValue(args, ref i, text, out var octaveText, out error))
                     {
                         return false;
                     }
 
-                    var maxOctaves = arg == "--bass-octave" ? ConversionOptionsValidator.MaxBassOctaveShift : ConversionOptionsValidator.MaxOctaveShift;
+                    var maxOctaves = arg switch
+                    {
+                        "--bass-octave" => ConversionOptionsValidator.MaxBassOctaveShift,
+                        "--chord-octave" => ConversionOptionsValidator.MaxChordOctaveShift,
+                        "--guide-octave" => ConversionOptionsValidator.MaxGuideToneOctaveShift,
+                        "--double-octave" => ConversionOptionsValidator.MaxDoublingSemitones / 12,
+                        _ => ConversionOptionsValidator.MaxOctaveShift,
+                    };
                     if (!int.TryParse(octaveText, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var octaves)
                         || octaves < -maxOctaves
                         || octaves > maxOctaves)
@@ -121,6 +164,9 @@ internal sealed record CliArguments
                         "--vocal-octave" => result with { VocalOctave = octaves },
                         "--ins-octave" => result with { InsOctave = octaves },
                         "--bass-octave" => result with { BassOctave = octaves, Bass = result.Bass ?? BassPattern.Eighths },
+                        "--chord-octave" => result with { ChordOctave = octaves },
+                        "--guide-octave" => result with { GuideOctave = octaves, GuideTones = true },
+                        "--double-octave" => result with { DoubleOctave = octaves, DoubleVocal = true },
                         _ => result with { Octave = octaves },
                     };
                     break;
@@ -172,8 +218,73 @@ internal sealed record CliArguments
 
                     result = result with { Chords = chordPattern };
                     break;
+                case "--chord-voicing":
+                    if (!TryTakeValue(args, ref i, text, out var voicingText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!ChordInversions.TryGetValue(voicingText, out var inversion))
+                    {
+                        error = text.Format(text.InvalidChordVoicing, voicingText, string.Join(", ", ChordInversions.Keys));
+                        return false;
+                    }
+
+                    result = result with { Inversion = inversion };
+                    break;
                 case "--no-chords":
                     result = result with { IncludeChords = false };
+                    break;
+                case "--no-crash":
+                    result = result with { Crash = false };
+                    break;
+                case "--guide-tones":
+                    result = result with { GuideTones = true };
+                    break;
+                case "--double-vocal":
+                    result = result with { DoubleVocal = true };
+                    break;
+                case "--swing":
+                    if (!TryTakePercent(args, ref i, text, out var swing, out error))
+                    {
+                        return false;
+                    }
+
+                    result = result with { SwingPercent = swing };
+                    break;
+                case "--swing-unit":
+                    if (!TryTakeValue(args, ref i, text, out var unitText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!SwingUnits.TryGetValue(unitText, out var unit))
+                    {
+                        error = text.Format(text.InvalidSwingUnit, unitText, string.Join(", ", SwingUnits.Keys));
+                        return false;
+                    }
+
+                    result = result with { SwingUnit = unit };
+                    break;
+                case "--straight-drums":
+                    result = result with { StraightDrums = true };
+                    break;
+                case "--humanize":
+                    if (!TryTakePercent(args, ref i, text, out var humanize, out error))
+                    {
+                        return false;
+                    }
+
+                    result = result with { HumanizePercent = humanize };
+                    break;
+                case "--mono":
+                    result = result with { Mono = true };
+                    break;
+                case "--legato":
+                    result = result with { Mono = true, Legato = true };
+                    break;
+                case "--logic-split-sections":
+                    result = result with { SplitSections = true };
                     break;
                 case "-f" or "--force":
                     result = result with { Force = true };
@@ -222,15 +333,44 @@ internal sealed record CliArguments
             shifts["Ins"] = ins;
         }
 
+        // A voicing or a register alone is reason enough for a chord track; it then plays the chords as written.
+        var chords = Chords is not null || Inversion is not null || ChordOctave != 0
+            ? new ChordOptions
+            {
+                Pattern = Chords ?? ChordPattern.Block,
+                Inversion = Inversion ?? ChordInversion.RootPosition,
+                OctaveShift = ChordOctave,
+            }
+            : null;
+
         return new ArrangementOptions
         {
             DefaultOctaveShift = Octave,
             OctaveShifts = shifts,
             Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern, OctaveShift = BassOctave } : null,
-            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums } : null,
-            Chords = Chords is { } chords ? new ChordOptions { Pattern = chords } : null,
+            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums, CrashOnSections = Crash } : null,
+            Chords = chords,
+            GuideTones = GuideTones ? new GuideToneOptions { OctaveShift = GuideOctave } : null,
+            Doubling = DoubleVocal ? new DoublingOptions { Semitones = 12 * DoubleOctave } : null,
+            Groove = SwingPercent > 0 || HumanizePercent > 0
+                ? new GrooveOptions
+                {
+                    Swing = SwingPercent / 100.0,
+                    SwingUnit = SwingUnit,
+                    IncludeDrums = !StraightDrums,
+                    HumanizeTimingMs = HumanizePercent / 100.0 * MaxHumanizeTimingMs,
+                    HumanizeVelocity = (int)Math.Round(HumanizePercent / 100.0 * MaxHumanizeVelocity),
+                }
+                : null,
+            Mono = Mono ? new MonoOptions { Legato = Legato } : null,
         };
     }
+
+    /// <summary>What <c>--humanize 100</c> means: a note moves by up to this much.</summary>
+    private const double MaxHumanizeTimingMs = 25;
+
+    /// <summary>What <c>--humanize 100</c> means for the velocities.</summary>
+    private const int MaxHumanizeVelocity = 24;
 
     private static readonly Dictionary<string, BassPattern> BassPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -250,6 +390,20 @@ internal sealed record CliArguments
         ["arpeggio"] = ChordPattern.ArpeggioUp,
     };
 
+    private static readonly Dictionary<string, ChordInversion> ChordInversions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["root"] = ChordInversion.RootPosition,
+        ["closest"] = ChordInversion.Closest,
+        ["first"] = ChordInversion.First,
+        ["second"] = ChordInversion.Second,
+    };
+
+    private static readonly Dictionary<string, SwingUnit> SwingUnits = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["eighths"] = SwingUnit.Eighths,
+        ["sixteenths"] = SwingUnit.Sixteenths,
+    };
+
     private static readonly Dictionary<string, DrumPattern> DrumPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
         ["four-on-the-floor"] = DrumPattern.FourOnTheFloor,
@@ -257,6 +411,24 @@ internal sealed record CliArguments
         ["half-time"] = DrumPattern.HalfTime,
         ["disco"] = DrumPattern.Disco,
     };
+
+    private static bool TryTakePercent(string[] args, ref int i, CliText text, out int value, out string? error)
+    {
+        value = 0;
+        if (!TryTakeValue(args, ref i, text, out var percentText, out error))
+        {
+            return false;
+        }
+
+        var option = args[i - 1];
+        if (!int.TryParse(percentText, NumberStyles.None, CultureInfo.InvariantCulture, out value) || value > 100)
+        {
+            error = text.Format(text.InvalidPercent, option, percentText);
+            return false;
+        }
+
+        return true;
+    }
 
     private static bool TryTakeValue(string[] args, ref int i, CliText text, out string value, out string? error)
     {
