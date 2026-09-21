@@ -161,7 +161,9 @@ Mit `--logic-split-sections` (Weboberfläche: *Eine Region pro Abschnitt statt e
 
 Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus einer von Logic Pro 12.3 gespeicherten Vorlage (`src/YueToLogic.Core/Logic/Template`), in der Noten, Längen, Tempo, Taktart, Marker, Akkorde und Audio ersetzt werden; Akkordregionen und Markernamen über die der Vorlage hinaus werden als neue Objekte angelegt und so registriert, wie Logic es selbst tut. Die in der Vorlage gewählten Instrumente gelten für jedes Projekt. Das Format wurde analysiert und jede Änderung durch Öffnen, Bearbeiten, Speichern und erneutes Öffnen in Logic geprüft. Grenzen: Das Audio muss 48 kHz haben, und die Akkordskalen für die Session Player sind ein Standard je Akkordart. Eine künftige Logic-Version kann eine neu gespeicherte Vorlage erfordern.
 
-Für eigene Klänge legst du eine Vorlage genauso an: eine MIDI-Datei dieses Tools in Logic öffnen (*Ablage → Öffnen*), `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln).
+Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` –, und nicht nach dem Instrument, das die Vorlage zufällig verwendet, denn die Regionen tragen inzwischen die Abschnittsnamen. Logic führt den Spurnamen am Kanalzug, dieser wird also umbenannt; Audiospur und Stereo-Summe behalten ihren.
+
+**Eigene Klänge und weitere Spuren.** Welche Spuren ein Projekt hat, gibt die Vorlage vor – eine dort ergänzte Spur ist überall vorhanden. Konvertiere den Score einmal mit den gewünschten Spuren (`--guide-tones`, `--double-vocal`), öffne die MIDI-Datei in Logic (*Ablage → Öffnen*), das die Spuren danach benennt, und baue die Vorlage daraus: `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln). Eine Spur wird über ihren Namen einer Stimme zugeordnet, die Namen aus der MIDI-Datei also beibehalten.
 
 ## Container und Deployment
 
@@ -213,7 +215,7 @@ Eine Standard-MIDI-Datei vom Typ 1:
 
 Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
 
-Die Logic-Vorlage hat fünf MIDI-Spuren; Guide-Tone- und Dopplungsspur landen deshalb in der MIDI-Datei, aber nicht im Logic-Projekt – eine Warnung (`YTL053`) weist darauf hin. Eine Vorlage mit Spuren namens `Guide` und `Vocal 8vb` nimmt auch sie auf.
+Welche Spuren ein Logic-Projekt hat, gibt die Vorlage vor und nicht dieses Werkzeug; die mitgelieferte hat sieben: `Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide` und `Vocal 8vb`. Eine Stimme, für die die Vorlage keine Spur hat – etwa eine Dopplung der Instrumentalstimme (`Ins 8vb`) –, landet in der MIDI-Datei, aber nicht im Logic-Projekt; eine Warnung (`YTL053`) weist darauf hin und nennt die Spuren, die die Vorlage hat. Eine eigene Vorlage mit einer passend benannten Spur – siehe *Logic-Pro-Projekt* weiter unten – füllt auch diese.
 
 ## Tempo anpassen
 
