@@ -48,6 +48,9 @@ internal sealed record CliArguments
     /// <summary>Crash cymbal at the start of every section; only has an effect together with a drum track.</summary>
     public bool Crash { get; init; } = true;
 
+    /// <summary>One track per drum instead of one drum track.</summary>
+    public bool SplitDrums { get; init; }
+
     public bool GuideTones { get; init; }
 
     public int GuideOctave { get; init; }
@@ -264,6 +267,9 @@ internal sealed record CliArguments
                 case "--no-chords":
                     result = result with { IncludeChords = false };
                     break;
+                case "--split-drums":
+                    result = result with { SplitDrums = true, Drums = result.Drums ?? DrumPattern.FourOnTheFloor };
+                    break;
                 case "--no-crash":
                     result = result with { Crash = false };
                     break;
@@ -410,7 +416,7 @@ internal sealed record CliArguments
             DefaultOctaveShift = Octave,
             OctaveShifts = shifts,
             Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern, OctaveShift = BassOctave } : null,
-            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums, CrashOnSections = Crash } : null,
+            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums, CrashOnSections = Crash, SeparateTracks = SplitDrums } : null,
             Chords = chords,
             GuideTones = GuideTones ? new GuideToneOptions { OctaveShift = GuideOctave } : null,
             Doubling = DoubleVocal ? new DoublingOptions { Semitones = 12 * DoubleOctave } : null,

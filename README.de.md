@@ -43,6 +43,7 @@ MIDI:        /…/score.mid
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
 | `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; schließt `--drums` ein |
 | `--no-crash` | Kein Crash-Becken zu Beginn eines Abschnitts |
+| `--split-drums` | Eine Spur je Trommel: `Kick`, `Snare`, `HiHat`, `Crash`; schließt `--drums` ein |
 | `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
 | `--channel <spur>=<n>` | Fester MIDI-Kanal 1–16 für eine Spur (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); mehrfach möglich |
 | `--program <spur>=<n>` | Programmwechsel 1–128 zu Beginn einer Spur; mehrfach möglich |
@@ -235,7 +236,7 @@ Eine Standard-MIDI-Datei vom Typ 1:
 
 `--mono` bereitet die Melodiespuren – und den Bass – für monophone Synthesizer auf. Drei Dinge stehen dem sonst im Weg: zwei gleichzeitig klingende Töne, von denen der Synth einen verwirft; sich berührende Noten, bei denen die Hüllkurve nie neu ausgelöst wird und zwei Töne als ein langes Gleiten herauskommen; und Noten, die so kurz sind, dass eine langsame Hüllkurve gar nicht öffnet. Die Aufbereitung lässt immer nur einen Ton klingen, hält vor dem nächsten Anschlag eine kurze Lücke und dehnt die kürzesten Noten. `--legato` lässt zusätzlich jede Note bis zur nächsten reichen, sodass die Spur zu einer durchgehenden Folge von Gates wird. Sie läuft nach dem Groove, damit ihre Zusagen auch für das gelten, was am Ende geschrieben wird.
 
-Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
+Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Mit `--split-drums` (Weboberfläche: *Eine Spur je Trommel*) verteilt sich das Schlagzeug auf die Spuren `Kick`, `Snare`, `HiHat` und `Crash` – dieselben Noten, nur getrennt, damit jede Trommel ihr eigenes Instrument und ihren eigenen Platz in der Mischung bekommt. Alle bleiben auf dem General-MIDI-Schlagzeugkanal, und eine Trommel, die das Muster nicht spielt, bekommt keine Spur. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
 
 Welche Spuren ein Logic-Projekt hat, gibt die Vorlage vor und nicht dieses Werkzeug; die mitgelieferte hat sieben: `Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide` und `Vocal 8vb`. Eine Stimme, für die die Vorlage keine Spur hat – etwa eine Dopplung der Instrumentalstimme (`Ins 8vb`) –, landet in der MIDI-Datei, aber nicht im Logic-Projekt; eine Warnung (`YTL053`) weist darauf hin und nennt die Spuren, die die Vorlage hat. Eine eigene Vorlage mit einer passend benannten Spur – siehe *Logic-Pro-Projekt* weiter unten – füllt auch diese.
 

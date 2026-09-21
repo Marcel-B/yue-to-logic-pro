@@ -43,6 +43,7 @@ MIDI:        /…/score.mid
 | `--drums` | Add a drum track (see below) |
 | `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; implies `--drums` |
 | `--no-crash` | No crash cymbal at the start of a section |
+| `--split-drums` | One track per drum: `Kick`, `Snare`, `HiHat`, `Crash`; implies `--drums` |
 | `--chord-pattern <p>` | How the chords are played: `block` (default, as written), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
 | `--channel <track>=<n>` | Fixed MIDI channel 1–16 for a track (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); repeatable |
 | `--program <track>=<n>` | Program change 1–128 at the start of a track; repeatable |
@@ -235,7 +236,7 @@ A Standard MIDI File, type 1:
 
 `--mono` prepares the melodic tracks (and the bass) for monophonic synthesizers, where three things otherwise get in the way: two notes sounding at once, which the synth answers by dropping one; notes that touch, where the envelope is never re-triggered and two notes come out as one long slide; and notes so short that a slow envelope never opens. It keeps one note at a time, leaves a short gap before the next attack and stretches the shortest notes. `--legato` additionally lets every note reach to the one after it, so the track becomes a continuous line of gates. The clean-up runs after the groove, so its guarantees also hold for what is finally written.
 
-The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` or `"Doubling"`. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
+The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` or `"Doubling"`. With `--split-drums` (web interface: *One track per drum*) the kit spreads over the tracks `Kick`, `Snare`, `HiHat` and `Crash` — the same notes, only apart, so that every drum can have its own instrument and its own place in the mix. They all stay on the General MIDI drum channel, and a drum the pattern never plays gets no track. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
 
 Which tracks a Logic project has comes from the template, not from this tool, and the one shipped with it has seven: `Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide` and `Vocal 8vb`. A voice the template has no track for — a doubling of the instrumental voice (`Ins 8vb`), say — reaches the MIDI file but not the Logic project; a warning (`YTL053`) says so and lists the tracks the template does have. Saving your own template with a track of that name — see *Logic Pro project* below — fills it as well.
 

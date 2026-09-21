@@ -157,6 +157,10 @@ function signed(value: number): string {
         <input v-model="form.crash" type="checkbox" :disabled="form.drums === 'off'" />
         {{ t('crash') }}
       </label>
+      <label class="check" :class="{ disabled: form.drums === 'off' }">
+        <input v-model="form.splitDrums" type="checkbox" :disabled="form.drums === 'off'" />
+        {{ t('splitDrums') }}
+      </label>
     </fieldset>
 
     <fieldset>

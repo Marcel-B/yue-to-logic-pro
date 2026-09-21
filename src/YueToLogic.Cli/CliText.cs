@@ -91,6 +91,7 @@ internal sealed class CliText
                   --drum-pattern <p>  Drum groove: four-on-the-floor (default), backbeat (kick 1+3, snare 2+4,
                                       open hi-hat on 4+), half-time, disco, sixteenth-hats, shuffle;
                                       implies --drums
+                  --split-drums       One track per drum: Kick, Snare, HiHat, Crash; implies --drums
                   --chord-pattern <p> How the chords are played: block (default, as written), eighths,
                                       sixteenths, offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Inversion of the chords: root (default), closest (smooth voice leading),
@@ -197,6 +198,7 @@ internal sealed class CliText
                   --drum-pattern <p>  Groove: four-on-the-floor (Standard), backbeat (Kick 1+3, Snare 2+4,
                                       offene Hi-Hat auf 4+), half-time, disco, sixteenth-hats, shuffle;
                                       schließt --drums ein
+                  --split-drums       Eine Spur je Trommel: Kick, Snare, HiHat, Crash; schließt --drums ein
                   --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, sixteenths,
                                       offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Akkordlage: root (Standard), closest (weiche Stimmführung), first, second
