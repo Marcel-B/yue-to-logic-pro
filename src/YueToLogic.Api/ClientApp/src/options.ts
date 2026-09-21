@@ -39,6 +39,10 @@ export interface FormState {
   fitTempo: boolean
   /** One region per song section in the Logic project; used by the Logic export only. */
   splitSections: boolean
+  /** MIDI channel per track, 0 = the next free one. Keyed by track name. */
+  channels: Record<string, number>
+  /** Program change per track, 0 = none. Keyed by track name. */
+  programs: Record<string, number>
   ppq: number
 }
 
@@ -68,6 +72,8 @@ export const defaultFormState = (): FormState => ({
   countInClick: true,
   fitTempo: false,
   splitSections: false,
+  channels: {},
+  programs: {},
   ppq: 480,
 })
 
@@ -134,7 +140,14 @@ export function toConversionOptions(form: FormState, audioLength: number | null 
       countIn: form.countIn > 0 ? { bars: form.countIn, click: form.countInClick } : null,
     },
     fitTempo: form.fitTempo && audioLength !== null ? { audioSeconds: audioLength } : null,
+    midiChannels: chosen(form.channels),
+    midiPrograms: chosen(form.programs),
   }
+}
+
+/** Only tracks the user actually set a number for; zero means "leave it to the converter". */
+function chosen(values: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value > 0))
 }
 
 const storageKey = 'yue-to-logic.options'

@@ -38,12 +38,14 @@ MIDI:        /…/score.mid
 | `--octave <n>` | Move both melodies by `n` octaves (−4 to 4) |
 | `--vocal-octave <n>`, `--ins-octave <n>` | Move only one melody; takes precedence over `--octave` |
 | `--bass` | Add a bass track (see below) |
-| `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`; implies `--bass` |
+| `--bass-pattern <p>` | Bass rhythm: `eighths` (default), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`, `walking`; implies `--bass` |
 | `--bass-octave <n>` | Move the bass by `n` octaves (−2 to 2); implies `--bass` |
 | `--drums` | Add a drum track (see below) |
-| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`, `half-time`, `disco`; implies `--drums` |
+| `--drum-pattern <p>` | Drum groove: `four-on-the-floor` (default), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; implies `--drums` |
 | `--no-crash` | No crash cymbal at the start of a section |
-| `--chord-pattern <p>` | How the chords are played: `block` (default, as written), `eighths`, `offbeat`, `arpeggio` |
+| `--chord-pattern <p>` | How the chords are played: `block` (default, as written), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
+| `--channel <track>=<n>` | Fixed MIDI channel 1–16 for a track (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); repeatable |
+| `--program <track>=<n>` | Program change 1–128 at the start of a track; repeatable |
 | `--chord-voicing <v>` | Inversion of the chords: `root` (default), `closest`, `first`, `second` (see below) |
 | `--chord-octave <n>` | Move the chord track by `n` octaves (−2 to 2) |
 | `--guide-tones` | Add a held track of every chord's third and seventh (see below) |
@@ -76,6 +78,10 @@ Preferably open the MIDI file with *File → Open*: Logic then creates a new pro
 ## Web interface
 
 A Vue frontend lets you drop a `score.abc` (or pick it with a file dialog), set the same parameters as the CLI, and download the MIDI file and the JSON dump. It also shows tempo, meter, key, length, the song sections and all diagnostics.
+
+Instead of two single files you can drop a **whole YuE output folder**, or open it with *Choose folder*: `score.abc` and `audio.flac` are looked for inside, one level down in `song1`, `song2` and so on as well. With several songs in the folder the first one is taken and the number of the others is reported.
+
+**Presets** above the parameter list save the whole set under a name and bring it back — for the combination of patterns, registers, groove and MIDI channels you usually work with. They live in the browser and survive *Reset*, which only clears the form.
 
 ### Preview
 
@@ -164,6 +170,22 @@ Logic's project format is undocumented. The project is therefore built from a te
 Each track is named after the part it carries — `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` — rather than after the instrument the template happens to use, since the regions now carry the section names instead. Logic keeps a track's name on its channel strip, so this renames those; the audio track and the output bus keep theirs.
 
 **Your own sounds, and further tracks.** The tracks a project has come from the template, so adding one there adds it everywhere. Convert your score once with the tracks you want (`--guide-tones`, `--double-vocal`), open the MIDI file in Logic (*File → Open*), which names the tracks after it, and build the template from that: drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`). A track is matched to a voice by name, so keep the names the MIDI file gave them.
+
+## Stems (optional)
+
+On request the web interface sends the `audio.flac` to [StemMyWav](https://github.com/Marcel-B/StemMyWav) and gets it back split into vocals and instrumental. The separation runs on a Mac with a Metal GPU and takes minutes, depending on the length. The flow is therefore asynchronous: the job is created, the interface asks for its state every five seconds, downloads the ZIP with `vocals.wav` and `instrumental.wav` at the end and confirms the import, whereupon the service drops its files at once. The switch *Separate the reverb from the vocals* adds `vocals_dry.wav` and `vocals_reverb.wav`.
+
+The API key stays on the server: the browser only ever talks to this application, which passes the requests on.
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /api/stems` | – | `{"available":true}` when a stem service is configured |
+| `POST /api/stems?dereverb=false` | the raw FLAC as the body (`Content-Type: audio/flac`) | job with `id` and `status` |
+| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` or `failed`, with `lastError` |
+| `GET /api/stems/{id}/result` | – | the ZIP with the WAV stems |
+| `DELETE /api/stems/{id}` | – | confirms the import; the service removes result and job |
+
+It is configured with `Stems:BaseUrl` and `Stems:ApiKey` (`Stems__BaseUrl` and `Stems__ApiKey` in the container, see [`deploy/.env.example`](deploy/.env.example)). Without either of them the endpoints answer `501` and the interface leaves the section out. With the gateway on the same docker host the address is `http://stemmywav:8080`; this compose project then has to join its network (prepared, commented out, in [`deploy/compose.yml`](deploy/compose.yml)).
 
 ## Container and deployment
 
@@ -288,5 +310,6 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- **Batch mode** for a folder of scores, since a YuE run usually leaves several takes.
+- **Stems in the Logic project** rather than a download only: vocals and instrumental as audio tracks of their own beside the mix. That needs a template with several audio tracks and the audio objects cloned in the project format.
+- **Several songs of a run** offered for choosing, instead of quietly taking the first one.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.

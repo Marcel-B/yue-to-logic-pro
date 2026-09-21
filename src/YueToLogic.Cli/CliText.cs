@@ -19,6 +19,7 @@ internal sealed class CliText
     public required string InvalidBassPattern { get; init; }
     public required string InvalidDrumPattern { get; init; }
     public required string InvalidChordPattern { get; init; }
+    public required string InvalidAssignment { get; init; }
     public required string InvalidChordVoicing { get; init; }
     public required string InvalidSwingUnit { get; init; }
     public required string InvalidPercent { get; init; }
@@ -84,13 +85,14 @@ internal sealed class CliText
                   --ins-octave <n>    Move only the instrumental melody (takes precedence over --octave)
                   --bass              Add a bass track playing the chord roots in eighth notes
                   --bass-pattern <p>  Bass rhythm: eighths (default), quarters, root-fifth, octaves, offbeat,
-                                      sustained; implies --bass
+                                      sustained, walking; implies --bass
                   --bass-octave <n>   Move the bass by n octaves (-2 to 2); implies --bass
                   --drums             Add a four-on-the-floor drum track with a crash on every section
                   --drum-pattern <p>  Drum groove: four-on-the-floor (default), backbeat (kick 1+3, snare 2+4,
-                                      open hi-hat on 4+), half-time, disco; implies --drums
-                  --chord-pattern <p> How the chords are played: block (default, as written), eighths, offbeat,
-                                      arpeggio
+                                      open hi-hat on 4+), half-time, disco, sixteenth-hats, shuffle;
+                                      implies --drums
+                  --chord-pattern <p> How the chords are played: block (default, as written), eighths,
+                                      sixteenths, offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Inversion of the chords: root (default), closest (smooth voice leading),
                                       first, second
                   --chord-octave <n>  Move the chord track by n octaves (-2 to 2)
@@ -113,6 +115,9 @@ internal sealed class CliText
                   --fit-tempo         Adjust the tempo so the score lasts as long as the audio given with
                                       --logic. A difference of more than 5 percent is reported instead,
                                       because the recording was then probably cut short
+                  --channel <t>=<n>   MIDI channel 1-16 for track t (Vocal, Ins, Chords, Bass, Drums, Guide,
+                                      "Vocal 8vb"); repeatable, others get the next free channel
+                  --program <t>=<n>   Program change 1-128 sent at the start of track t; repeatable
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
                   --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
@@ -132,6 +137,7 @@ internal sealed class CliText
         InvalidBassPattern = "Unknown bass pattern '{0}'; expected one of: {1}.",
         InvalidDrumPattern = "Unknown drum pattern '{0}'; expected one of: {1}.",
         InvalidChordPattern = "Unknown chord pattern '{0}'; expected one of: {1}.",
+        InvalidAssignment = "{0} expects <track>=<number> with a number from 1 to {2}, got '{1}'.",
         InvalidChordVoicing = "Unknown chord voicing '{0}'; expected one of: {1}.",
         InvalidSwingUnit = "Unknown swing unit '{0}'; expected one of: {1}.",
         InvalidPercent = "Invalid {0} value '{1}'; expected a whole number between 0 and 100.",
@@ -185,12 +191,14 @@ internal sealed class CliText
                   --ins-octave <n>    Nur die Instrumentalmelodie verschieben (hat Vorrang vor --octave)
                   --bass              Bassspur hinzufügen, spielt die Akkordgrundtöne in Achteln
                   --bass-pattern <p>  Bassrhythmus: eighths (Standard), quarters, root-fifth, octaves, offbeat,
-                                      sustained; schließt --bass ein
+                                      sustained, walking; schließt --bass ein
                   --bass-octave <n>   Bass um n Oktaven verschieben (-2 bis 2); schließt --bass ein
                   --drums             Schlagzeugspur (Four on the Floor) mit Crash zu jedem Abschnitt hinzufügen
                   --drum-pattern <p>  Groove: four-on-the-floor (Standard), backbeat (Kick 1+3, Snare 2+4,
-                                      offene Hi-Hat auf 4+), half-time, disco; schließt --drums ein
-                  --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, offbeat, arpeggio
+                                      offene Hi-Hat auf 4+), half-time, disco, sixteenth-hats, shuffle;
+                                      schließt --drums ein
+                  --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, sixteenths,
+                                      offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Akkordlage: root (Standard), closest (weiche Stimmführung), first, second
                   --chord-octave <n>  Akkordspur um n Oktaven verschieben (-2 bis 2)
                   --no-crash          Kein Crash-Becken zu Beginn eines Abschnitts
@@ -212,6 +220,9 @@ internal sealed class CliText
                   --fit-tempo         Tempo so anpassen, dass der Score so lang ist wie das mit --logic
                                       angegebene Audio. Mehr als 5 Prozent Abweichung werden stattdessen
                                       gemeldet, weil die Aufnahme dann vermutlich abgeschnitten ist
+                  --channel <s>=<n>   MIDI-Kanal 1-16 für Spur s (Vocal, Ins, Chords, Bass, Drums, Guide,
+                                      "Vocal 8vb"); mehrfach möglich, der Rest bekommt den nächsten freien
+                  --program <s>=<n>   Programmwechsel 1-128 zu Beginn der Spur s; mehrfach möglich
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
                   --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
@@ -231,6 +242,7 @@ internal sealed class CliText
         InvalidBassPattern = "Unbekanntes Bassmuster '{0}'; erlaubt sind: {1}.",
         InvalidDrumPattern = "Unbekanntes Schlagzeugmuster '{0}'; erlaubt sind: {1}.",
         InvalidChordPattern = "Unbekanntes Akkordmuster '{0}'; erlaubt sind: {1}.",
+        InvalidAssignment = "{0} erwartet <Spur>=<Zahl> mit einer Zahl von 1 bis {2}, bekam '{1}'.",
         InvalidChordVoicing = "Unbekannte Akkordlage '{0}'; erlaubt sind: {1}.",
         InvalidSwingUnit = "Unbekannte Swing-Einheit '{0}'; erlaubt sind: {1}.",
         InvalidPercent = "Ungültiger Wert für {0}: '{1}'; erwartet wird eine ganze Zahl zwischen 0 und 100.",

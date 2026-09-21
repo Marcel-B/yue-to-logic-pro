@@ -16,6 +16,9 @@ services:
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
       # Host names the app answers to; "*" accepts any (see .env.example).
       AllowedHosts: ${ALLOWED_HOSTS:-*}
+      # StemMyWav, which separates a recording into stems. Without both values the app offers no stems.
+      Stems__BaseUrl: ${STEMS_BASE_URL:-}
+      Stems__ApiKey: ${STEMS_API_KEY:-}
       TZ: ${TZ:-Europe/Berlin}
     # The app keeps no state: nothing is written except temporary files.
     read_only: true
@@ -30,3 +33,14 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+    # To reach the stem gateway by its container name, join the network of its compose project as well:
+    # uncomment both blocks below, set STEMS_BASE_URL=http://stemmywav:8080 and make sure that network exists.
+    # A gateway published under a name of its own (https://stem.example) needs neither block.
+    # networks:
+    #   - default
+    #   - stemmywav
+
+# networks:
+#   stemmywav:
+#     external: true
+#     name: ${STEMS_NETWORK:-stemmywav}

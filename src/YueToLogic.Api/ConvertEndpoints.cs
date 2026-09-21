@@ -70,7 +70,7 @@ public static class ConvertEndpoints
             return BadRequest("Audio file too large", $"The audio may have at most {MaxAudioBytes / (1024 * 1024)} MB.");
         }
 
-        var (result, problem) = await RunAsync(file, options, converter, cancellationToken);
+        var (result, problem, parsed) = await RunAsync(file, options, converter, cancellationToken);
         if (problem is not null)
         {
             return problem;
@@ -103,6 +103,7 @@ public static class ConvertEndpoints
                 {
                     ProjectName = packageName,
                     SplitRegionsAtSections = splitSections ?? false,
+                    Channels = parsed.MidiChannels,
                 };
                 logic = await writer.WriteAsync(result.Score!, audioStream, sink, logicOptions, cancellationToken);
             }
@@ -154,7 +155,7 @@ public static class ConvertEndpoints
         IScoreConverter converter,
         CancellationToken cancellationToken)
     {
-        var (result, problem) = await RunAsync(file, options, converter, cancellationToken);
+        var (result, problem, _) = await RunAsync(file, options, converter, cancellationToken);
         if (problem is not null)
         {
             return problem;
@@ -172,7 +173,7 @@ public static class ConvertEndpoints
         IScoreConverter converter,
         CancellationToken cancellationToken)
     {
-        var (result, problem) = await RunAsync(file, options, converter, cancellationToken);
+        var (result, problem, _) = await RunAsync(file, options, converter, cancellationToken);
         if (problem is not null)
         {
             return problem;
@@ -187,7 +188,7 @@ public static class ConvertEndpoints
         return Results.File(result.Midi!, "audio/midi", string.IsNullOrWhiteSpace(downloadName) ? "score.mid" : downloadName);
     }
 
-    private static async Task<(ConversionResult? Result, IResult? Problem)> RunAsync(
+    private static async Task<(ConversionResult? Result, IResult? Problem, ConversionOptions Options)> RunAsync(
         IFormFile? file,
         string? optionsJson,
         IScoreConverter converter,
@@ -195,12 +196,12 @@ public static class ConvertEndpoints
     {
         if (file is null || file.Length == 0)
         {
-            return (null, BadRequest("Missing score file", "Send the score.abc as form field 'file'."));
+            return (null, BadRequest("Missing score file", "Send the score.abc as form field 'file'."), new ConversionOptions());
         }
 
         if (file.Length > MaxScoreBytes)
         {
-            return (null, BadRequest("Score file too large", $"A score.abc is at most {MaxScoreBytes / 1024} KB."));
+            return (null, BadRequest("Score file too large", $"A score.abc is at most {MaxScoreBytes / 1024} KB."), new ConversionOptions());
         }
 
         ConversionOptions options;
@@ -212,11 +213,11 @@ public static class ConvertEndpoints
         }
         catch (JsonException ex)
         {
-            return (null, BadRequest("Invalid options", $"Form field 'options' is not valid JSON: {ex.Message}"));
+            return (null, BadRequest("Invalid options", $"Form field 'options' is not valid JSON: {ex.Message}"), new ConversionOptions());
         }
 
         await using var stream = file.OpenReadStream();
-        return (await converter.ConvertAsync(stream, options, cancellationToken), null);
+        return (await converter.ConvertAsync(stream, options, cancellationToken), null, options);
     }
 
     private static IResult BadRequest(string title, string detail) =>

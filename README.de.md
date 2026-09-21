@@ -38,12 +38,14 @@ MIDI:        /…/score.mid
 | `--octave <n>` | Beide Melodien um `n` Oktaven verschieben (−4 bis 4) |
 | `--vocal-octave <n>`, `--ins-octave <n>` | Nur eine Melodie verschieben; hat Vorrang vor `--octave` |
 | `--bass` | Bassspur hinzufügen (siehe unten) |
-| `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`; schließt `--bass` ein |
+| `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`, `walking`; schließt `--bass` ein |
 | `--bass-octave <n>` | Bass um `n` Oktaven verschieben (−2 bis 2); schließt `--bass` ein |
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
-| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`; schließt `--drums` ein |
+| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; schließt `--drums` ein |
 | `--no-crash` | Kein Crash-Becken zu Beginn eines Abschnitts |
-| `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `offbeat`, `arpeggio` |
+| `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
+| `--channel <spur>=<n>` | Fester MIDI-Kanal 1–16 für eine Spur (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); mehrfach möglich |
+| `--program <spur>=<n>` | Programmwechsel 1–128 zu Beginn einer Spur; mehrfach möglich |
 | `--chord-voicing <v>` | Lage der Akkorde: `root` (Standard), `closest`, `first`, `second` (siehe unten) |
 | `--chord-octave <n>` | Akkordspur um `n` Oktaven verschieben (−2 bis 2) |
 | `--guide-tones` | Liegende Spur aus Terz und Septime jedes Akkords hinzufügen (siehe unten) |
@@ -76,6 +78,10 @@ Die MIDI-Datei am besten über *Ablage → Öffnen* öffnen: Logic legt dann ein
 ## Weboberfläche
 
 Im Vue-Frontend zieht man eine `score.abc` hinein (oder wählt sie über den Dateidialog), stellt dieselben Parameter wie in der CLI ein und lädt MIDI-Datei und JSON-Dump herunter. Außerdem zeigt es Tempo, Taktart, Tonart, Länge, die Abschnitte des Songs und alle Meldungen.
+
+Statt zweier einzelner Dateien lässt sich auch der **ganze Ausgabeordner eines YuE-Laufs** ablegen oder über *Ordner auswählen* öffnen: Darin werden `score.abc` und `audio.flac` gesucht, auch eine Ebene tiefer in `song1`, `song2` und so weiter. Enthält der Ordner mehrere Songs, wird der erste genommen und die Zahl der übrigen gemeldet.
+
+**Voreinstellungen** über der Parameterliste sichern den ganzen Satz unter einem Namen und holen ihn wieder – für die Kombination aus Mustern, Oktavlagen, Groove und MIDI-Kanälen, mit der du üblicherweise arbeitest. Sie liegen im Browser und überstehen *Zurücksetzen*, das nur das Formular leert.
 
 ### Vorschau
 
@@ -164,6 +170,22 @@ Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus ei
 Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` –, und nicht nach dem Instrument, das die Vorlage zufällig verwendet, denn die Regionen tragen inzwischen die Abschnittsnamen. Logic führt den Spurnamen am Kanalzug, dieser wird also umbenannt; Audiospur und Stereo-Summe behalten ihren.
 
 **Eigene Klänge und weitere Spuren.** Welche Spuren ein Projekt hat, gibt die Vorlage vor – eine dort ergänzte Spur ist überall vorhanden. Konvertiere den Score einmal mit den gewünschten Spuren (`--guide-tones`, `--double-vocal`), öffne die MIDI-Datei in Logic (*Ablage → Öffnen*), das die Spuren danach benennt, und baue die Vorlage daraus: `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln). Eine Spur wird über ihren Namen einer Stimme zugeordnet, die Namen aus der MIDI-Datei also beibehalten.
+
+## Stems (optional)
+
+Auf Wunsch schickt die Weboberfläche die `audio.flac` an [StemMyWav](https://github.com/Marcel-B/StemMyWav) und bekommt sie in Gesang und Instrumental getrennt zurück. Getrennt wird auf einem Mac mit Metal-GPU; das dauert je nach Länge einige Minuten. Der Ablauf ist deshalb asynchron: Der Auftrag wird angelegt, die Oberfläche fragt alle fünf Sekunden nach dem Stand, lädt am Ende das ZIP mit `vocals.wav` und `instrumental.wav` herunter und bestätigt den Import, woraufhin der Dienst seine Dateien sofort löscht. Mit dem Schalter *Hall vom Gesang trennen* kommen `vocals_dry.wav` und `vocals_reverb.wav` dazu.
+
+Der API-Schlüssel bleibt dabei im Server: Der Browser spricht nur mit dieser Anwendung, die die Anfragen weiterreicht.
+
+| Endpunkt | Anfrage | Antwort |
+|---|---|---|
+| `GET /api/stems` | – | `{"available":true}`, wenn ein Stem-Dienst eingerichtet ist |
+| `POST /api/stems?dereverb=false` | die rohe FLAC als Body (`Content-Type: audio/flac`) | Auftrag mit `id` und `status` |
+| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` oder `failed` samt `lastError` |
+| `GET /api/stems/{id}/result` | – | das ZIP mit den WAV-Stems |
+| `DELETE /api/stems/{id}` | – | bestätigt den Import; der Dienst löscht Ergebnis und Auftrag |
+
+Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `Stems__BaseUrl` und `Stems__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt den Bereich gar nicht erst an. Läuft der Gateway im selben Docker-Host, ist `http://stemmywav:8080` die Adresse; dafür muss dieses Compose-Projekt dessen Netz beitreten (in [`deploy/compose.yml`](deploy/compose.yml) auskommentiert vorbereitet).
 
 ## Container und Deployment
 
@@ -288,5 +310,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-- **Batch-/Ordner-Modus** für mehrere Scores, da ein YuE-Lauf meist mehrere Takes hinterlässt.
+- **Stems ins Logic-Projekt**, statt sie nur herunterzuladen: Gesang und Instrumental als eigene Audiospuren neben dem Mix. Dafür braucht es eine Vorlage mit mehreren Audiospuren und das Klonen der Audio-Objekte im Projektformat.
+- **Mehrere Songs eines Laufs** zur Auswahl stellen, statt stillschweigend den ersten zu nehmen.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.

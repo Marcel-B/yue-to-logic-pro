@@ -85,6 +85,8 @@ var result = new ScoreConverter().Convert(abc, new ConversionOptions
     IncludeChordTrack = options.IncludeChords,
     Arrangement = options.ToArrangementOptions(),
     FitTempo = fitTempo,
+    MidiChannels = options.MidiChannels,
+    MidiPrograms = options.MidiPrograms,
 });
 
 PrintDiagnostics(result.Diagnostics);

@@ -72,11 +72,18 @@ export interface ConversionResult {
   diagnostics: Diagnostic[]
 }
 
-export type BassPattern = 'Eighths' | 'Quarters' | 'RootFifth' | 'Octaves' | 'Offbeat' | 'Sustained'
+export type BassPattern =
+  | 'Eighths'
+  | 'Quarters'
+  | 'RootFifth'
+  | 'Octaves'
+  | 'Offbeat'
+  | 'Sustained'
+  | 'Walking'
 
-export type DrumPattern = 'FourOnTheFloor' | 'Backbeat' | 'HalfTime' | 'Disco'
+export type DrumPattern = 'FourOnTheFloor' | 'Backbeat' | 'HalfTime' | 'Disco' | 'SixteenthHats' | 'Shuffle'
 
-export type ChordPattern = 'Block' | 'Eighths' | 'Offbeat' | 'ArpeggioUp'
+export type ChordPattern = 'Block' | 'Eighths' | 'Sixteenths' | 'Offbeat' | 'ArpeggioUp' | 'ArpeggioUpDown'
 
 export type ChordInversion = 'RootPosition' | 'Closest' | 'First' | 'Second'
 
@@ -105,4 +112,20 @@ export interface ConversionOptions {
   }
   /** Set by the client once an audio file is chosen; the length is read from its FLAC header. */
   fitTempo: { audioSeconds: number } | null
+  /** MIDI channel (1-16) per track name; a track without an entry gets the next free one. */
+  midiChannels: Record<string, number>
+  /** Program change (1-128) sent at the start of the track, per track name. */
+  midiPrograms: Record<string, number>
 }
+
+/** A stem separation job as the backend reports it. */
+export interface StemJob {
+  id: string
+  /** queued, processing, completed or failed. */
+  status: string
+  attempts: number
+  lastError: string | null
+}
+
+/** The tracks a conversion can produce, in the order the MIDI file lists them. */
+export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide'] as const
