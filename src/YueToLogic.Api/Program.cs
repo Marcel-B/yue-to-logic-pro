@@ -1,4 +1,5 @@
 using YueToLogic.Api;
+using YueToLogic.Core.Stems;
 
 const string CorsPolicy = "ConfiguredOrigins";
 
@@ -9,6 +10,19 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 
 builder.Services.AddYueToLogic();
+
+// Stem separation is optional: without an address and a key the endpoints answer that this server has none.
+var stems = builder.Configuration.GetSection("Stems");
+if (Uri.TryCreate(stems["BaseUrl"], UriKind.Absolute, out var stemService) && !string.IsNullOrWhiteSpace(stems["ApiKey"]))
+{
+    builder.Services.AddHttpClient<IStemSeparationService, StemSeparationService>(client =>
+    {
+        client.BaseAddress = stemService;
+        client.DefaultRequestHeaders.Add("X-Api-Key", stems["ApiKey"]);
+        // A separation runs for minutes, but every call here only starts, asks or fetches.
+        client.Timeout = TimeSpan.FromMinutes(10);
+    });
+}
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
@@ -35,6 +49,7 @@ var api = app.MapGroup("/api");
 // HEAD as well, since uptime monitors often probe with it.
 api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
 api.MapConvertEndpoints();
+api.MapStemEndpoints();
 
 app.MapClientApp();
 

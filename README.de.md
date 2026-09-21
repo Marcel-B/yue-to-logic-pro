@@ -171,6 +171,22 @@ Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords
 
 **Eigene Klänge und weitere Spuren.** Welche Spuren ein Projekt hat, gibt die Vorlage vor – eine dort ergänzte Spur ist überall vorhanden. Konvertiere den Score einmal mit den gewünschten Spuren (`--guide-tones`, `--double-vocal`), öffne die MIDI-Datei in Logic (*Ablage → Öffnen*), das die Spuren danach benennt, und baue die Vorlage daraus: `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln). Eine Spur wird über ihren Namen einer Stimme zugeordnet, die Namen aus der MIDI-Datei also beibehalten.
 
+## Stems (optional)
+
+Auf Wunsch schickt die Weboberfläche die `audio.flac` an [StemMyWav](https://github.com/Marcel-B/StemMyWav) und bekommt sie in Gesang und Instrumental getrennt zurück. Getrennt wird auf einem Mac mit Metal-GPU; das dauert je nach Länge einige Minuten. Der Ablauf ist deshalb asynchron: Der Auftrag wird angelegt, die Oberfläche fragt alle fünf Sekunden nach dem Stand, lädt am Ende das ZIP mit `vocals.wav` und `instrumental.wav` herunter und bestätigt den Import, woraufhin der Dienst seine Dateien sofort löscht. Mit dem Schalter *Hall vom Gesang trennen* kommen `vocals_dry.wav` und `vocals_reverb.wav` dazu.
+
+Der API-Schlüssel bleibt dabei im Server: Der Browser spricht nur mit dieser Anwendung, die die Anfragen weiterreicht.
+
+| Endpunkt | Anfrage | Antwort |
+|---|---|---|
+| `GET /api/stems` | – | `{"available":true}`, wenn ein Stem-Dienst eingerichtet ist |
+| `POST /api/stems?dereverb=false` | die rohe FLAC als Body (`Content-Type: audio/flac`) | Auftrag mit `id` und `status` |
+| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` oder `failed` samt `lastError` |
+| `GET /api/stems/{id}/result` | – | das ZIP mit den WAV-Stems |
+| `DELETE /api/stems/{id}` | – | bestätigt den Import; der Dienst löscht Ergebnis und Auftrag |
+
+Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `Stems__BaseUrl` und `Stems__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt den Bereich gar nicht erst an. Läuft der Gateway im selben Docker-Host, ist `http://stemmywav:8080` die Adresse; dafür muss dieses Compose-Projekt dessen Netz beitreten (in [`deploy/compose.yml`](deploy/compose.yml) auskommentiert vorbereitet).
+
 ## Container und Deployment
 
 Die CI baut ein Container-Image mit API und Weboberfläche und pusht es in die GitHub Container Registry, sobald Tests und Publish grün sind:
@@ -294,5 +310,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-- **Batch-/Ordner-Modus** für mehrere Scores, da ein YuE-Lauf meist mehrere Takes hinterlässt.
+- **Stems ins Logic-Projekt**, statt sie nur herunterzuladen: Gesang und Instrumental als eigene Audiospuren neben dem Mix. Dafür braucht es eine Vorlage mit mehreren Audiospuren und das Klonen der Audio-Objekte im Projektformat.
+- **Mehrere Songs eines Laufs** zur Auswahl stellen, statt stillschweigend den ersten zu nehmen.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.

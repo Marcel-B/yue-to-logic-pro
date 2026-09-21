@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ApiError, convertScore, exportLogicProject, LogicExportError } from './api'
+import { ApiError, convertScore, exportLogicProject, LogicExportError, stemsAvailable } from './api'
 import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
 import ScorePreview from './components/ScorePreview.vue'
 import FileDropZone from './components/FileDropZone.vue'
+import StemPanel from './components/StemPanel.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { deletePreset, loadPresets, savePreset } from './presets'
@@ -18,6 +19,10 @@ const audio = ref<File | null>(null)
 const audioLength = ref<number | null>(null)
 /** What came out of a dropped folder: nothing usable, or which of several songs was taken. */
 const folderNote = ref<string | null>(null)
+
+/** Whether this server can have stems separated; without a stem service the panel stays away. */
+const stems = ref(false)
+void stemsAvailable().then((available) => (stems.value = available))
 
 const presets = ref(loadPresets())
 /** The preset the form currently shows; empty once a preset is saved under a new name or none is chosen. */
@@ -230,6 +235,7 @@ async function convert(): Promise<void> {
           @select="selectAudio"
           @clear="selectAudio(null)"
         />
+        <StemPanel v-if="stems" :audio="audio" :output-name="outputName" />
       </section>
     </div>
 

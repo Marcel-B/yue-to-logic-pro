@@ -1,4 +1,4 @@
-import type { ConversionOptions, ConversionResult, Diagnostic } from './types'
+import type { ConversionOptions, ConversionResult, Diagnostic, StemJob } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? ''
 
@@ -97,4 +97,57 @@ export async function exportLogicProject(
     fileName: `${name}.logicx.zip`,
     warnings: header ? (JSON.parse(header) as Diagnostic[]) : [],
   }
+}
+
+// ---- Stems -------------------------------------------------------------------------------------
+
+/** Whether this server can have a recording separated into stems at all. */
+export async function stemsAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch(`${apiBase}/api/stems`)
+    return response.ok && ((await response.json()) as { available: boolean }).available
+  } catch {
+    return false
+  }
+}
+
+/** Hands the recording over; the separation then runs for minutes on the stem service. */
+export async function startStemJob(audio: File, dereverb: boolean, signal?: AbortSignal): Promise<StemJob> {
+  return (await stemRequest(`/api/stems?dereverb=${dereverb}`, {
+    method: 'POST',
+    body: audio,
+    headers: { 'Content-Type': 'audio/flac' },
+    signal,
+  })).json() as Promise<StemJob>
+}
+
+export async function stemJobStatus(id: string, signal?: AbortSignal): Promise<StemJob> {
+  return (await stemRequest(`/api/stems/${id}`, { signal })).json() as Promise<StemJob>
+}
+
+export async function downloadStems(id: string): Promise<Blob> {
+  return (await stemRequest(`/api/stems/${id}/result`)).blob()
+}
+
+/** Confirms the import, whereupon the stem service drops the result. Failure here is not worth reporting. */
+export async function confirmStems(id: string): Promise<void> {
+  await stemRequest(`/api/stems/${id}`, { method: 'DELETE' }).catch(() => undefined)
+}
+
+async function stemRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  let response: Response
+  try {
+    response = await fetch(`${apiBase}${path}`, init)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error
+    }
+    throw new ApiError('network', 0)
+  }
+
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => null)) as { title?: string; detail?: string } | null
+    throw new ApiError(problem?.detail ?? problem?.title ?? `HTTP ${response.status}`, response.status)
+  }
+  return response
 }

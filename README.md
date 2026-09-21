@@ -171,6 +171,22 @@ Each track is named after the part it carries — `Vocal`, `Ins`, `Chords`, `Bas
 
 **Your own sounds, and further tracks.** The tracks a project has come from the template, so adding one there adds it everywhere. Convert your score once with the tracks you want (`--guide-tones`, `--double-vocal`), open the MIDI file in Logic (*File → Open*), which names the tracks after it, and build the template from that: drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`). A track is matched to a voice by name, so keep the names the MIDI file gave them.
 
+## Stems (optional)
+
+On request the web interface sends the `audio.flac` to [StemMyWav](https://github.com/Marcel-B/StemMyWav) and gets it back split into vocals and instrumental. The separation runs on a Mac with a Metal GPU and takes minutes, depending on the length. The flow is therefore asynchronous: the job is created, the interface asks for its state every five seconds, downloads the ZIP with `vocals.wav` and `instrumental.wav` at the end and confirms the import, whereupon the service drops its files at once. The switch *Separate the reverb from the vocals* adds `vocals_dry.wav` and `vocals_reverb.wav`.
+
+The API key stays on the server: the browser only ever talks to this application, which passes the requests on.
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /api/stems` | – | `{"available":true}` when a stem service is configured |
+| `POST /api/stems?dereverb=false` | the raw FLAC as the body (`Content-Type: audio/flac`) | job with `id` and `status` |
+| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` or `failed`, with `lastError` |
+| `GET /api/stems/{id}/result` | – | the ZIP with the WAV stems |
+| `DELETE /api/stems/{id}` | – | confirms the import; the service removes result and job |
+
+It is configured with `Stems:BaseUrl` and `Stems:ApiKey` (`Stems__BaseUrl` and `Stems__ApiKey` in the container, see [`deploy/.env.example`](deploy/.env.example)). Without either of them the endpoints answer `501` and the interface leaves the section out. With the gateway on the same docker host the address is `http://stemmywav:8080`; this compose project then has to join its network (prepared, commented out, in [`deploy/compose.yml`](deploy/compose.yml)).
+
 ## Container and deployment
 
 CI builds a container image with API and web interface and pushes it to the GitHub Container Registry once tests and publish have passed:
@@ -294,5 +310,6 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- **Batch mode** for a folder of scores, since a YuE run usually leaves several takes.
+- **Stems in the Logic project** rather than a download only: vocals and instrumental as audio tracks of their own beside the mix. That needs a template with several audio tracks and the audio objects cloned in the project format.
+- **Several songs of a run** offered for choosing, instead of quietly taking the first one.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.

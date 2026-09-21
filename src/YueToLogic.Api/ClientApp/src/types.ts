@@ -118,5 +118,14 @@ export interface ConversionOptions {
   midiPrograms: Record<string, number>
 }
 
+/** A stem separation job as the backend reports it. */
+export interface StemJob {
+  id: string
+  /** queued, processing, completed or failed. */
+  status: string
+  attempts: number
+  lastError: string | null
+}
+
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide'] as const
