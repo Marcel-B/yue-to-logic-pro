@@ -241,6 +241,26 @@ internal sealed record CliArguments
 
                     result = result with { Inversion = inversion };
                     break;
+                case "--channel" or "--program":
+                    if (!TryTakeValue(args, ref i, text, out var assignment, out error))
+                    {
+                        return false;
+                    }
+
+                    var separator = assignment.LastIndexOf('=');
+                    var isChannel = arg == "--channel";
+                    var limit = isChannel ? 16 : 128;
+                    if (separator <= 0
+                        || !int.TryParse(assignment[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+                        || value < 1
+                        || value > limit)
+                    {
+                        error = text.Format(text.InvalidAssignment, arg, assignment, limit);
+                        return false;
+                    }
+
+                    (isChannel ? result.MidiChannels : result.MidiPrograms)[assignment[..separator]] = value;
+                    break;
                 case "--no-chords":
                     result = result with { IncludeChords = false };
                     break;
@@ -356,6 +376,12 @@ internal sealed record CliArguments
         return true;
     }
 
+    /// <summary>MIDI channel per track name, from <c>--channel Bass=5</c>.</summary>
+    public Dictionary<string, int> MidiChannels { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Program change per track name, from <c>--program Bass=34</c>.</summary>
+    public Dictionary<string, int> MidiPrograms { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
     public ArrangementOptions ToArrangementOptions()
     {
         var shifts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -417,6 +443,7 @@ internal sealed record CliArguments
         ["octaves"] = BassPattern.Octaves,
         ["offbeat"] = BassPattern.Offbeat,
         ["sustained"] = BassPattern.Sustained,
+        ["walking"] = BassPattern.Walking,
     };
 
     private static readonly Dictionary<string, ChordPattern> ChordPatterns = new(StringComparer.OrdinalIgnoreCase)
@@ -425,6 +452,8 @@ internal sealed record CliArguments
         ["eighths"] = ChordPattern.Eighths,
         ["offbeat"] = ChordPattern.Offbeat,
         ["arpeggio"] = ChordPattern.ArpeggioUp,
+        ["arpeggio-up-down"] = ChordPattern.ArpeggioUpDown,
+        ["sixteenths"] = ChordPattern.Sixteenths,
     };
 
     private static readonly Dictionary<string, ChordInversion> ChordInversions = new(StringComparer.OrdinalIgnoreCase)
@@ -447,6 +476,8 @@ internal sealed record CliArguments
         ["backbeat"] = DrumPattern.Backbeat,
         ["half-time"] = DrumPattern.HalfTime,
         ["disco"] = DrumPattern.Disco,
+        ["sixteenth-hats"] = DrumPattern.SixteenthHats,
+        ["shuffle"] = DrumPattern.Shuffle,
     };
 
     private static bool TryTakePercent(string[] args, ref int i, CliText text, out int value, out string? error)

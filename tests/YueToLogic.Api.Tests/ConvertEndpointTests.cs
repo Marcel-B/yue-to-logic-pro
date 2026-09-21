@@ -108,7 +108,7 @@ public class ConvertEndpointTests(WebApplicationFactory<Program> factory) : ICla
 
     [Theory]
     [InlineData("{oops", "Invalid options")]
-    [InlineData("""{"arrangement":{"bass":{"pattern":"walking"}}}""", "Invalid options")]
+    [InlineData("""{"arrangement":{"bass":{"pattern":"stride"}}}""", "Invalid options")]
     public async Task Malformed_options_are_a_bad_request(string options, string title)
     {
         var response = await _client.PostAsync("/api/convert", Form(SampleScore, options));

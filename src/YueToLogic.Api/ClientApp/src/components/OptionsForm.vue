@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t } from '../i18n'
 import type { FormState } from '../options'
+import { TRACK_NAMES } from '../types'
 
 const form = defineModel<FormState>({ required: true })
 
@@ -10,6 +11,19 @@ defineProps<{ hasAudio: boolean }>()
 const octaves = [-4, -3, -2, -1, 0, 1, 2, 3, 4]
 const bassOctaves = [-2, -1, 0, 1, 2]
 const countInBars = [0, 1, 2, 4]
+const channels = Array.from({ length: 16 }, (_, i) => i + 1)
+
+/**
+ * Channels and programs are kept only for the tracks that have one, so that saved settings stay small and
+ * a track without a setting keeps following the converter.
+ */
+function assign(values: Record<string, number>, track: string, value: number): void {
+  if (value > 0) {
+    values[track] = value
+  } else {
+    delete values[track]
+  }
+}
 
 function signed(value: number): string {
   return value > 0 ? `+${value}` : String(value)
@@ -30,7 +44,9 @@ function signed(value: number): string {
           <option value="as-written">{{ t('chordsAsWritten') }}</option>
           <option value="Eighths">{{ t('chordsEighths') }}</option>
           <option value="Offbeat">{{ t('chordsOffbeat') }}</option>
+          <option value="Sixteenths">{{ t('chordsSixteenths') }}</option>
           <option value="ArpeggioUp">{{ t('chordsArpeggio') }}</option>
+          <option value="ArpeggioUpDown">{{ t('chordsArpeggioUpDown') }}</option>
         </select>
       </label>
       <div class="row">
@@ -111,6 +127,7 @@ function signed(value: number): string {
             <option value="Octaves">{{ t('bassOctaves') }}</option>
             <option value="Offbeat">{{ t('bassOffbeat') }}</option>
             <option value="Sustained">{{ t('bassSustained') }}</option>
+            <option value="Walking">{{ t('bassWalking') }}</option>
           </select>
         </label>
         <label>
@@ -132,6 +149,8 @@ function signed(value: number): string {
           <option value="Backbeat">{{ t('drumsBackbeat') }}</option>
           <option value="HalfTime">{{ t('drumsHalfTime') }}</option>
           <option value="Disco">{{ t('drumsDisco') }}</option>
+          <option value="SixteenthHats">{{ t('drumsSixteenthHats') }}</option>
+          <option value="Shuffle">{{ t('drumsShuffle') }}</option>
         </select>
       </label>
       <label class="check" :class="{ disabled: form.drums === 'off' }">
@@ -222,6 +241,43 @@ function signed(value: number): string {
         {{ t('ppq') }}
         <input v-model.number="form.ppq" type="number" min="24" max="32767" step="24" />
       </label>
+
+      <p class="muted intro">{{ t('midiTracksInfo') }}</p>
+      <table class="tracks">
+        <thead>
+          <tr>
+            <th>{{ t('midiTrack') }}</th>
+            <th>{{ t('midiChannel') }}</th>
+            <th>{{ t('midiProgram') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="track in TRACK_NAMES" :key="track">
+            <th scope="row">{{ track }}</th>
+            <td>
+              <select
+                :value="form.channels[track] ?? 0"
+                :aria-label="`${t('midiChannel')} ${track}`"
+                @change="assign(form.channels, track, Number(($event.target as HTMLSelectElement).value))"
+              >
+                <option :value="0">{{ t('midiAuto') }}</option>
+                <option v-for="channel in channels" :key="channel" :value="channel">{{ channel }}</option>
+              </select>
+            </td>
+            <td>
+              <input
+                :value="form.programs[track] ?? ''"
+                type="number"
+                min="1"
+                max="128"
+                :placeholder="t('midiNone')"
+                :aria-label="`${t('midiProgram')} ${track}`"
+                @input="assign(form.programs, track, Number(($event.target as HTMLInputElement).value))"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </details>
   </div>
 </template>
@@ -324,6 +380,30 @@ legend {
 
 .inline input {
   width: 7rem;
+}
+
+.tracks {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tracks th {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: left;
+}
+
+.tracks td,
+.tracks th {
+  padding: 0.15rem 0.5rem 0.15rem 0;
+}
+
+.tracks select,
+.tracks input {
+  width: 100%;
+  min-width: 4rem;
 }
 
 summary {
