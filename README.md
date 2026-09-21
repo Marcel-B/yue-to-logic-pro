@@ -176,7 +176,7 @@ Each track is named after the part it carries — `Vocal`, `Ins`, `Chords`, `Bas
 
 ## Stems (optional)
 
-On request the web interface sends the `audio.flac` to [StemMyWav](https://github.com/Marcel-B/StemMyWav) and gets it back split into vocals and instrumental. The separation runs on a Mac with a Metal GPU and takes minutes, depending on the length. The flow is therefore asynchronous: the job is created, the interface asks for its state every five seconds, downloads the ZIP with `vocals.wav` and `instrumental.wav` at the end and confirms the import, whereupon the service drops its files at once. The switch *Separate the reverb from the vocals* adds `vocals_dry.wav` and `vocals_reverb.wav`.
+On request the web interface sends the `audio.flac` to [StemMyWav](https://github.com/Marcel-B/StemMyWav) and gets it back split into vocals and instrumental. The separation runs on a Mac with a Metal GPU and takes minutes, depending on the length. The flow is therefore asynchronous: the job is created, the interface asks for its state every five seconds and says so in a window once it is done. There you choose whether the Logic project is downloaded with the stems right away, whether the stems are discarded, or whether you take them later with the usual button. Nothing is downloaded on its own; the stems stay at the service until they have gone into a project or you delete them. Whoever wants them separately downloads the ZIP. The switch *Separate the reverb from the vocals* adds `vocals_dry.wav` and `vocals_reverb.wav`.
 
 The API key stays on the server: the browser only ever talks to this application, which passes the requests on.
 

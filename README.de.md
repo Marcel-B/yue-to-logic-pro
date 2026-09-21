@@ -176,7 +176,7 @@ Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords
 
 ## Stems (optional)
 
-Auf Wunsch schickt die Weboberfläche die `audio.flac` an [StemMyWav](https://github.com/Marcel-B/StemMyWav) und bekommt sie in Gesang und Instrumental getrennt zurück. Getrennt wird auf einem Mac mit Metal-GPU; das dauert je nach Länge einige Minuten. Der Ablauf ist deshalb asynchron: Der Auftrag wird angelegt, die Oberfläche fragt alle fünf Sekunden nach dem Stand, lädt am Ende das ZIP mit `vocals.wav` und `instrumental.wav` herunter und bestätigt den Import, woraufhin der Dienst seine Dateien sofort löscht. Mit dem Schalter *Hall vom Gesang trennen* kommen `vocals_dry.wav` und `vocals_reverb.wav` dazu.
+Auf Wunsch schickt die Weboberfläche die `audio.flac` an [StemMyWav](https://github.com/Marcel-B/StemMyWav) und bekommt sie in Gesang und Instrumental getrennt zurück. Getrennt wird auf einem Mac mit Metal-GPU; das dauert je nach Länge einige Minuten. Der Ablauf ist deshalb asynchron: Der Auftrag wird angelegt, die Oberfläche fragt alle fünf Sekunden nach dem Stand und meldet sich mit einem Fenster, sobald er fertig ist. Dort wählst du, ob das Logic-Projekt gleich mit den Stems geladen werden soll, ob die Stems verworfen werden oder ob du später über den gewohnten Knopf lädst. Heruntergeladen wird von selbst nichts; die Stems bleiben beim Dienst, bis sie ins Projekt gewandert sind oder du sie löschst. Wer sie einzeln haben will, lädt sie als ZIP. Mit dem Schalter *Hall vom Gesang trennen* kommen `vocals_dry.wav` und `vocals_reverb.wav` dazu.
 
 Der API-Schlüssel bleibt dabei im Server: Der Browser spricht nur mit dieser Anwendung, die die Anfragen weiterreicht.
 

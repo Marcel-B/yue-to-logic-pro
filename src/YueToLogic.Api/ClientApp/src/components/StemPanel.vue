@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { ApiError, confirmStems, downloadStems, startStemJob, stemJobStatus } from '../api'
 import { t } from '../i18n'
 import { download } from '../score'
 
 const props = defineProps<{
   audio: File | null
-  /** File name of the conversion, so the stems land beside the MIDI file under the same name. */
+  /** File name of the conversion, so a downloaded ZIP is named after it. */
   outputName: string
 }>()
 
@@ -16,13 +16,19 @@ const props = defineProps<{
  */
 const job = defineModel<string | null>('job', { required: true })
 
+/** Asks the app to write a Logic project now, which takes the stems along and confirms the import. */
+const emit = defineEmits<{ exportLogic: [] }>()
+
 /** How often the job is asked about; a separation runs for minutes, so this is not a busy wait. */
 const pollMilliseconds = 5000
 
 const dereverb = ref(false)
 const status = ref<string | null>(null)
 const error = ref<string | null>(null)
-const busy = ref(false)
+/** Whether a separation is running, which the result view says next to its Logic button. */
+const busy = defineModel<boolean>('running', { required: true })
+const downloading = ref(false)
+const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 let jobId: string | null = null
 let timer: number | undefined
 
@@ -51,6 +57,7 @@ function reset(): void {
   if (job.value) {
     void confirmStems(job.value)
   }
+  close()
   jobId = null
   job.value = null
   status.value = null
@@ -66,9 +73,9 @@ async function start(): Promise<void> {
   reset()
   busy.value = true
   try {
-    const job = await startStemJob(props.audio, dereverb.value)
-    jobId = job.id
-    status.value = job.status
+    const started = await startStemJob(props.audio, dereverb.value)
+    jobId = started.id
+    status.value = started.status
     poll()
   } catch (caught) {
     fail(caught)
@@ -82,12 +89,16 @@ function poll(): void {
     }
 
     try {
-      const job = await stemJobStatus(jobId)
-      status.value = job.status
-      if (job.status === 'completed') {
-        await save(jobId)
-      } else if (job.status === 'failed') {
-        error.value = job.lastError ?? t('stemsFailed')
+      const state = await stemJobStatus(jobId)
+      status.value = state.status
+      if (state.status === 'completed') {
+        // Nothing is downloaded on its own: the stems stay at the service until they are asked for.
+        job.value = jobId
+        jobId = null
+        busy.value = false
+        dialog.value?.showModal()
+      } else if (state.status === 'failed') {
+        error.value = state.lastError ?? t('stemsFailed')
         busy.value = false
       } else {
         poll()
@@ -98,16 +109,40 @@ function poll(): void {
   }, pollMilliseconds)
 }
 
-/**
- * Downloads the ZIP for the browser and keeps the job, so that the Logic export can still fetch the stems
- * from the service. Confirming it there removes them; an unconfirmed job the service clears after a day.
- */
-async function save(id: string): Promise<void> {
-  const stems = await downloadStems(id)
-  download(stems, `${props.outputName || 'score'}-stems.zip`)
-  job.value = id
-  jobId = null
-  busy.value = false
+/** Writes the project with the stems in it; the server confirms the import, which removes them. */
+function intoProject(): void {
+  close()
+  emit('exportLogic')
+}
+
+/** The stems as the service sends them, for whoever wants them beside the project. */
+async function saveZip(): Promise<void> {
+  if (!job.value) {
+    return
+  }
+
+  downloading.value = true
+  try {
+    download(await downloadStems(job.value), `${props.outputName || 'score'}-stems.zip`)
+  } catch (caught) {
+    fail(caught)
+  } finally {
+    downloading.value = false
+  }
+}
+
+/** Throws the result away, for a separation that turned out not to be worth keeping. */
+function discard(): void {
+  close()
+  if (job.value) {
+    void confirmStems(job.value)
+    job.value = null
+  }
+  status.value = null
+}
+
+function close(): void {
+  dialog.value?.close()
 }
 
 function fail(caught: unknown): void {
@@ -132,10 +167,27 @@ function fail(caught: unknown): void {
       </label>
     </div>
 
+    <div v-if="job" class="row ready">
+      <button type="button" class="button secondary small" :disabled="downloading" @click="saveZip">
+        {{ downloading ? t('stemsDownloading') : t('stemsDownload') }}
+      </button>
+      <button type="button" class="button secondary small" @click="discard">{{ t('stemsDiscard') }}</button>
+    </div>
+
     <p v-if="!audio" class="hint muted">{{ t('stemsNeedsAudio') }}</p>
     <p v-else-if="busy && statusText" class="hint">{{ statusText }}</p>
-    <p v-else-if="status === 'completed'" class="hint">{{ job ? t('stemsDoneForLogic') : t('stemsDone') }}</p>
+    <p v-else-if="job" class="hint">{{ t('stemsWaiting') }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
+
+    <dialog ref="dialog" class="stem-dialog" @cancel.prevent="close">
+      <h3>{{ t('stemsReadyTitle') }}</h3>
+      <p>{{ t('stemsReadyInfo') }}</p>
+      <div class="choices">
+        <button type="button" class="button primary" @click="intoProject">{{ t('stemsIntoProject') }}</button>
+        <button type="button" class="button secondary" @click="close">{{ t('stemsLater') }}</button>
+        <button type="button" class="button secondary" @click="discard">{{ t('stemsDiscard') }}</button>
+      </div>
+    </dialog>
   </div>
 </template>
 
@@ -158,6 +210,10 @@ h3 {
   gap: 0.75rem;
 }
 
+.row.ready {
+  margin-top: 0.5rem;
+}
+
 .check {
   display: flex;
   align-items: center;
@@ -167,5 +223,30 @@ h3 {
 
 .check.disabled {
   color: var(--text-muted);
+}
+
+.stem-dialog {
+  max-width: 26rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.stem-dialog::backdrop {
+  background: rgb(0 0 0 / 50%);
+}
+
+.stem-dialog p {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 </style>

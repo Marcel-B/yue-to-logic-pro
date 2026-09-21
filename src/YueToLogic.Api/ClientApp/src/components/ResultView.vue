@@ -12,7 +12,29 @@ const props = defineProps<{
   logicBusy: boolean
   logicError: string | null
   logicWarnings: Diagnostic[]
+  /** A separation is still running, so a project written now would come without its stems. */
+  stemsRunning: boolean
+  /** A finished separation is waiting; the next project takes its stems along. */
+  stemsReady: boolean
 }>()
+
+/** What the button says: that a separation is still running is worth knowing before clicking it. */
+const logicLabel = computed(() => {
+  if (props.logicBusy) {
+    return t('buildingLogic')
+  }
+  return props.stemsRunning ? t('downloadLogicWithoutStems') : t('downloadLogic')
+})
+
+const logicNote = computed(() => {
+  if (props.stemsRunning) {
+    return t('logicStemsRunning')
+  }
+  if (props.stemsReady) {
+    return t('logicStemsReady')
+  }
+  return props.hasAudio ? t('logicHint') : t('logicWithoutAudio')
+})
 const emit = defineEmits<{ exportLogic: [] }>()
 
 const showInfos = ref(false)
@@ -132,13 +154,13 @@ function downloadJson(): void {
           type="button"
           class="button secondary"
           :disabled="logicBusy"
-          :title="hasAudio ? t('logicHint') : t('logicWithoutAudio')"
+          :title="logicNote"
           @click="emit('exportLogic')"
         >
-          {{ logicBusy ? t('buildingLogic') : t('downloadLogic') }}
+          {{ logicLabel }}
         </button>
       </div>
-      <p class="hint muted">{{ hasAudio ? t('logicHint') : t('logicWithoutAudio') }}</p>
+      <p class="hint muted">{{ logicNote }}</p>
       <p v-if="logicError" class="hint danger" role="alert">{{ logicError }}</p>
       <div v-if="logicWarnings.length" class="logic-warnings">
         <h3>{{ t('logicWarnings') }}</h3>
