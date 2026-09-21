@@ -315,6 +315,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-- **Stems ins Logic-Projekt**, statt sie nur herunterzuladen: Gesang und Instrumental als eigene Audiospuren neben dem Mix. Dafür braucht es eine Vorlage mit mehreren Audiospuren und das Klonen der Audio-Objekte im Projektformat.
 - **Mehrere Songs eines Laufs** zur Auswahl stellen, statt stillschweigend den ersten zu nehmen.
+- **Das Instrumental** aus der Trennung mitnehmen; die Vorlage hat dafür bisher keine Spur.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.

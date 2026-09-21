@@ -315,6 +315,6 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- **Stems in the Logic project** rather than a download only: vocals and instrumental as audio tracks of their own beside the mix. That needs a template with several audio tracks and the audio objects cloned in the project format.
 - **Several songs of a run** offered for choosing, instead of quietly taking the first one.
+- **The instrumental** from a separation as well; the template has no track for it yet.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.
