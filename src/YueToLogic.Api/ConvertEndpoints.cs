@@ -105,7 +105,7 @@ public static class ConvertEndpoints
                     SplitRegionsAtSections = splitSections ?? false,
                     Channels = parsed.MidiChannels,
                 };
-                logic = await writer.WriteAsync(result.Score!, audioStream, sink, logicOptions, cancellationToken);
+                logic = await writer.WriteAsync(result.Score!, new LogicAudio(audioStream), sink, logicOptions, cancellationToken);
             }
         }
         catch

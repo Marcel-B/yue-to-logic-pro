@@ -17,6 +17,12 @@ internal sealed record CliArguments
     /// <summary>YuE audio.flac of a Logic Pro project written with audio.</summary>
     public string? LogicAudioPath { get; init; }
 
+    /// <summary>Separated vocals for the Logic project's second audio track.</summary>
+    public string? VocalsPath { get; init; }
+
+    /// <summary>Separated vocals without their reverb, for the third audio track.</summary>
+    public string? VocalsDryPath { get; init; }
+
     /// <summary>Whether a Logic Pro project is written next to the MIDI file, with or without audio.</summary>
     public bool WriteLogicProject { get; init; }
 
@@ -130,6 +136,16 @@ internal sealed record CliArguments
                     }
 
                     result = result with { LogicAudioPath = audio, WriteLogicProject = true };
+                    break;
+                case "--vocals" or "--vocals-dry":
+                    if (!TryTakeValue(args, ref i, text, out var stem, out error))
+                    {
+                        return false;
+                    }
+
+                    result = arg == "--vocals"
+                        ? result with { VocalsPath = stem, WriteLogicProject = true }
+                        : result with { VocalsDryPath = stem, WriteLogicProject = true };
                     break;
                 case "--logic-no-audio":
                     result = result with { WriteLogicProject = true };

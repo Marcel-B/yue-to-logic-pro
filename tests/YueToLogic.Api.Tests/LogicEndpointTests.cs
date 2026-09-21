@@ -79,13 +79,13 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
     public async Task Splitting_at_sections_gives_every_track_one_region_per_section()
     {
         // Without options only the vocal and the chords carry notes, and the sample has two sections: those two
-        // tracks get a region each per section, the five empty ones keep their single region, plus the audio.
+        // tracks get a region each per section, the nine empty ones keep their single region, plus the audio.
         var plain = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273)));
         var split = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), splitSections: true));
 
         Assert.Equal(HttpStatusCode.OK, split.StatusCode);
-        Assert.Equal(8, await PlacementCountAsync(plain));
-        Assert.Equal(1 + (2 * 2) + 5, await PlacementCountAsync(split));
+        Assert.Equal(12, await PlacementCountAsync(plain));
+        Assert.Equal(1 + (2 * 2) + 9, await PlacementCountAsync(split));
     }
 
     /// <summary>The regions the project's arrangement holds: 80 bytes each, before its 16-byte terminator.</summary>

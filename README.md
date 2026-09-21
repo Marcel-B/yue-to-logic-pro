@@ -66,6 +66,8 @@ MIDI:        /…/score.mid
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
 | `--logic-no-audio` | Also write a Logic Pro project without audio; its audio track stays empty |
+| `--vocals <file>` | Separated vocals (WAV) for the second audio track of the Logic project |
+| `--vocals-dry <file>` | Separated vocals without reverb (WAV) for the third audio track |
 | `--dump-json <file>` | Also write the parsed score and all diagnostics as JSON; `.json` is appended if missing |
 | `-f, --force` | Overwrite existing output files |
 | `-v, --verbose` | Also show informational messages |
@@ -162,7 +164,7 @@ Clients served from another origin (for example an Electron shell) must be liste
 
 ## Logic Pro project (experimental)
 
-With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1, the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, the song sections as arrangement markers and every chord on Logic's chord track (which Session Players can follow), plus tempo, key, every meter change and the project length taken from the score. Without audio (CLI `--logic-no-audio`, web interface: simply leave the `audio.flac` out) you get the same project with an empty audio track, ready for the FLAC to be dropped onto later; the template's audio file object and its region are removed, as Logic would otherwise report a missing file when opening the project.
+With the YuE `audio.flac` (CLI `--logic`, web interface: second drop zone, then *Download Logic project*) the tool builds a complete Logic Pro project: the audio on track 1 at bar 1, the tracks Vocal, Ins, Chords, Bass and Drums as MIDI regions, the song sections as arrangement markers and every chord on Logic's chord track (which Session Players can follow), plus tempo, key, every meter change and the project length taken from the score. The stems of a separation go on audio tracks of their own: the template has three, for the recording, the separated vocals and the vocals without their reverb. Each track is named after what it plays (*Mix*, *Vocals*, *Vocals dry*), and a track without a file leaves the project so that Logic misses nothing. Without audio (CLI `--logic-no-audio`, web interface: simply leave the `audio.flac` out) you get the same project with an empty audio track, ready for the FLAC to be dropped onto later; the template's audio file object and its region are removed, as Logic would otherwise report a missing file when opening the project.
 
 With `--logic-split-sections` (web interface: *One region per section instead of one per track*) every track is cut at the section starts instead of running as one region: the regions are named after the section they cover, numbered when a name comes back (`Verse 1`, `Chorus 1`, `Verse 2`, …), so a section can be copied, looped, muted or moved on its own. A track the score has nothing for keeps its single empty region, and a note reaching past a section border keeps its length — the region grows with it rather than the note being cut. The audio stays one region at bar 1.
 
@@ -238,7 +240,7 @@ A Standard MIDI File, type 1:
 
 The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` or `"Doubling"`. With `--split-drums` (web interface: *One track per drum*) the kit spreads over the tracks `Kick`, `Snare`, `HiHat` and `Crash` — the same notes, only apart, so that every drum can have its own instrument and its own place in the mix. They all stay on the General MIDI drum channel, and a drum the pattern never plays gets no track. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
 
-Which tracks a Logic project has comes from the template, not from this tool, and the one shipped with it has seven: `Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide` and `Vocal 8vb`. A voice the template has no track for — a doubling of the instrumental voice (`Ins 8vb`), say — reaches the MIDI file but not the Logic project; a warning (`YTL053`) says so and lists the tracks the template does have. Saving your own template with a track of that name — see *Logic Pro project* below — fills it as well.
+Which tracks a Logic project has comes from the template, not from this tool. The one shipped with it has eleven MIDI tracks — `Vocal`, `Ins`, `Vocal 8vb`, `Chords`, `Bass`, `Guide`, `Drums` and `Kick`, `Snare`, `HiHat`, `Crash` for a split kit — and three audio tracks for the recording and its stems. A voice the template has no track for — a doubling of the instrumental voice (`Ins 8vb`), say — reaches the MIDI file but not the Logic project; a warning (`YTL053`) says so and lists the tracks the template does have. Saving your own template with a track of that name — see *Logic Pro project* below — fills it as well.
 
 ## Fitting the tempo
 
