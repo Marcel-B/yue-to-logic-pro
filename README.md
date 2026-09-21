@@ -172,7 +172,7 @@ Logic's project format is undocumented. The project is therefore built from a te
 
 Each track is named after the part it carries — `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` — rather than after the instrument the template happens to use, since the regions now carry the section names instead. Logic keeps a track's name on its channel strip, so this renames those; the audio track and the output bus keep theirs.
 
-**Your own sounds, and further tracks.** The tracks a project has come from the template, so adding one there adds it everywhere. Convert your score once with the tracks you want (`--guide-tones`, `--double-vocal`), open the MIDI file in Logic (*File → Open*), which names the tracks after it, and build the template from that: drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`). A track is matched to a voice by name, so keep the names the MIDI file gave them.
+**Your own sounds, and further tracks.** The tracks a project has come from the template, so adding one there adds it everywhere. Convert your score once with the tracks you want (`--guide-tones`, `--double-vocal`), open the MIDI file in Logic (*File → Open*), which names the tracks after it, and build the template from that: drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`). A track is matched to a voice by name, so keep the names the MIDI file gave them. What the template sounds like does not matter: sampled instruments and reverbs with impulse responses remember where their files were, but every project written is cleared of those paths — Logic finds its own content by itself.
 
 ## Stems (optional)
 
@@ -316,5 +316,4 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 ## Next steps
 
 - **Several songs of a run** offered for choosing, instead of quietly taking the first one.
-- **The instrumental** from a separation as well; the template has no track for it yet.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.
