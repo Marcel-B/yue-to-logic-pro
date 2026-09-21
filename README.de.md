@@ -188,6 +188,8 @@ Der API-Schlüssel bleibt dabei im Server: Der Browser spricht nur mit dieser An
 | `GET /api/stems/{id}/result` | – | das ZIP mit den WAV-Stems |
 | `DELETE /api/stems/{id}` | – | bestätigt den Import; der Dienst löscht Ergebnis und Auftrag |
 
+Die Stems müssen dafür nicht durch den Browser: Beim Logic-Export genügt das Feld `stemJob` mit der Auftrags-ID, dann holt der Server die WAVs selbst beim Stem-Dienst und legt sie auf die Audiospuren des Projekts. Danach bestätigt er den Import, womit der Dienst seine Dateien löscht. Lässt sich ein Auftrag nicht laden, entsteht das Projekt trotzdem – ohne Stems und mit einer Warnung (`YTL054`).
+
 Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `Stems__BaseUrl` und `Stems__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt den Bereich gar nicht erst an. Läuft der Gateway im selben Docker-Host, ist `http://stemmywav:8080` die Adresse; dafür muss dieses Compose-Projekt dessen Netz beitreten (in [`deploy/compose.yml`](deploy/compose.yml) auskommentiert vorbereitet).
 
 ## Container und Deployment

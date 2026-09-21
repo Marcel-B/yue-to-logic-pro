@@ -5,8 +5,10 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using YueToLogic.Core.Diagnostics;
 using YueToLogic.Core.Serialization;
+using YueToLogic.Core.Stems;
 
 namespace YueToLogic.Api.Tests;
 
@@ -116,7 +118,116 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         throw new InvalidOperationException("The project has no arrangement.");
     }
 
-    private static MultipartFormDataContent Form(string score, byte[]? audio, string? name = null, bool? splitSections = null)
+    [Fact]
+    public async Task The_stems_of_a_finished_job_go_into_the_project()
+    {
+        var stems = new FakeStems();
+        var client = factory
+            .WithWebHostBuilder(builder => builder.ConfigureServices(services => services.AddSingleton<IStemSeparationService>(stems)))
+            .CreateClient();
+
+        var response = await client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), stemJob: FakeStems.Job));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var archive = new ZipArchive(await response.Content.ReadAsStreamAsync());
+        var audio = archive.Entries.Select(e => e.FullName).Where(n => n.Contains("Audio Files/", StringComparison.Ordinal)).Order(StringComparer.Ordinal);
+        Assert.Equal(
+            ["score.logicx/Media/Audio Files/audio.flac", "score.logicx/Media/Audio Files/vocals.wav", "score.logicx/Media/Audio Files/vocals_dry.wav"],
+            audio);
+
+        // The stems are in the package, so the job was confirmed and the service may drop them.
+        Assert.Equal(FakeStems.Job, stems.Deleted);
+        Assert.False(response.Headers.Contains(ConvertEndpoints.DiagnosticsHeader));
+    }
+
+    [Fact]
+    public async Task A_job_that_cannot_be_fetched_leaves_the_project_without_stems()
+    {
+        var stems = new FakeStems { Failure = new StemSeparationException("unknown job", HttpStatusCode.NotFound) };
+        var client = factory
+            .WithWebHostBuilder(builder => builder.ConfigureServices(services => services.AddSingleton<IStemSeparationService>(stems)))
+            .CreateClient();
+
+        var response = await client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), stemJob: FakeStems.Job));
+
+        // The project is still worth having, so the export carries on and says what happened.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var warnings = JsonSerializer.Deserialize(
+            Assert.Single(response.Headers.GetValues(ConvertEndpoints.DiagnosticsHeader)),
+            YueToLogicJsonContext.Default.DiagnosticArray)!;
+        Assert.Contains(warnings, w => w.Code == DiagnosticCodes.StemsUnavailable);
+        Assert.Null(stems.Deleted);
+
+        using var archive = new ZipArchive(await response.Content.ReadAsStreamAsync());
+        Assert.DoesNotContain(archive.Entries, e => e.Name == "vocals.wav");
+    }
+
+    /// <summary>A stem service whose result holds the two WAV files a project uses.</summary>
+    private sealed class FakeStems : IStemSeparationService
+    {
+        public static readonly Guid Job = Guid.Parse("22222222-3333-4444-5555-666666666666");
+
+        public StemSeparationException? Failure { get; init; }
+
+        public Guid? Deleted { get; private set; }
+
+        public Task<StemJob> StartAsync(Stream flacAudio, bool dereverb = false, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new StemJob(Job, StemJobStatus.Queued));
+
+        public Task<StemJob> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new StemJob(id, StemJobStatus.Completed));
+
+        public Task<Stream> DownloadAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            if (Failure is not null)
+            {
+                throw Failure;
+            }
+
+            var buffer = new MemoryStream();
+            using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                foreach (var name in new[] { "vocals.wav", "instrumental.wav", "vocals_dry.wav" })
+                {
+                    using var entry = archive.CreateEntry(name).Open();
+                    entry.Write(Wave(48000, 2, 16, 1_000_000));
+                }
+            }
+
+            buffer.Position = 0;
+            return Task.FromResult<Stream>(buffer);
+        }
+
+        public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            Deleted = id;
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>A WAVE header of the usual chunks, followed by a little silence.</summary>
+    private static byte[] Wave(int sampleRate, int channels, int bitsPerSample, long samples)
+    {
+        var bytesPerFrame = channels * (bitsPerSample / 8);
+        var data = (int)(samples * bytesPerFrame);
+        var header = new byte[44];
+        "RIFF"u8.CopyTo(header);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), (uint)(36 + data));
+        "WAVE"u8.CopyTo(header.AsSpan(8));
+        "fmt "u8.CopyTo(header.AsSpan(12));
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(16), 16);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(20), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(22), (ushort)channels);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(24), (uint)sampleRate);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(28), (uint)(sampleRate * bytesPerFrame));
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(32), (ushort)bytesPerFrame);
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(34), (ushort)bitsPerSample);
+        "data"u8.CopyTo(header.AsSpan(36));
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(40), (uint)data);
+        return [.. header, .. new byte[1024]];
+    }
+
+    private static MultipartFormDataContent Form(string score, byte[]? audio, string? name = null, bool? splitSections = null, Guid? stemJob = null)
     {
         var form = new MultipartFormDataContent();
         var scoreContent = new StringContent(score, Encoding.UTF8);
@@ -132,6 +243,11 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         if (name is not null)
         {
             form.Add(new StringContent(name), "name");
+        }
+
+        if (stemJob is { } job)
+        {
+            form.Add(new StringContent(job.ToString()), "stemJob");
         }
 
         if (splitSections is { } split)

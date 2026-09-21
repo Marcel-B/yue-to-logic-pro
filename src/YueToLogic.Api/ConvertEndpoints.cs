@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using YueToLogic.Core.Conversion;
 using YueToLogic.Core.Diagnostics;
 using YueToLogic.Core.Logic;
 using YueToLogic.Core.Serialization;
+using YueToLogic.Core.Stems;
 
 namespace YueToLogic.Api;
 
@@ -49,7 +51,7 @@ public static class ConvertEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes + MaxScoreBytes + 64 * 1024))
             .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes)
             .WithName("ConvertToLogic")
-            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section.");
+            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section, 'stemJob' puts the stems of a finished separation on their own audio tracks.");
 
         return api;
     }
@@ -60,8 +62,10 @@ public static class ConvertEndpoints
         [FromForm] string? options,
         [FromForm] string? name,
         [FromForm] bool? splitSections,
+        [FromForm] Guid? stemJob,
         IScoreConverter converter,
         ILogicProjectWriter writer,
+        IServiceProvider services,
         HttpContext context,
         CancellationToken cancellationToken)
     {
@@ -93,6 +97,12 @@ public static class ConvertEndpoints
             bufferSize: 81920,
             FileOptions.DeleteOnClose | FileOptions.Asynchronous);
 
+        // The separated stems come from the stem service rather than from the browser, which only knows the job.
+        var stemService = services.GetService<IStemSeparationService>();
+        await using var stems = stemJob is { } job
+            ? await StemImport.FetchAsync(stemService, job, cancellationToken)
+            : null;
+
         LogicProjectResult logic;
         try
         {
@@ -105,7 +115,8 @@ public static class ConvertEndpoints
                     SplitRegionsAtSections = splitSections ?? false,
                     Channels = parsed.MidiChannels,
                 };
-                logic = await writer.WriteAsync(result.Score!, new LogicAudio(audioStream), sink, logicOptions, cancellationToken);
+                var logicAudio = new LogicAudio(audioStream, stems?.Vocals, stems?.VocalsDry);
+                logic = await writer.WriteAsync(result.Score!, logicAudio, sink, logicOptions, cancellationToken);
             }
         }
         catch
@@ -114,7 +125,14 @@ public static class ConvertEndpoints
             throw;
         }
 
-        IReadOnlyList<Diagnostic> diagnostics = [.. result.Diagnostics, .. logic.Diagnostics];
+        // The stems are in the package now, so the service may drop them; an unconfirmed job it clears itself.
+        if (logic.Success && stemJob is { } imported && stems?.HasStems == true && stemService is not null)
+        {
+            await stemService.DeleteAsync(imported, cancellationToken).ConfigureAwait(false);
+        }
+
+        IReadOnlyList<Diagnostic> diagnostics =
+            [.. result.Diagnostics, .. logic.Diagnostics, .. stems?.Problem is { } stemProblem ? new[] { stemProblem } : []];
         if (!logic.Success)
         {
             await zip.DisposeAsync();

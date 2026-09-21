@@ -61,6 +61,8 @@ export async function exportLogicProject(
   name: string,
   /** One region per song section instead of one per track; a property of the project, not of the score. */
   splitSections: boolean,
+  /** A finished stem job, whose stems the server then puts on the project's own audio tracks. */
+  stemJob: string | null,
   signal?: AbortSignal,
 ): Promise<LogicExport> {
   const form = new FormData()
@@ -71,6 +73,9 @@ export async function exportLogicProject(
   form.append('options', JSON.stringify(options))
   form.append('name', name)
   form.append('splitSections', String(splitSections))
+  if (stemJob) {
+    form.append('stemJob', stemJob)
+  }
 
   let response: Response
   try {

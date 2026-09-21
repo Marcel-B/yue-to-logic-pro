@@ -22,6 +22,8 @@ const folderNote = ref<string | null>(null)
 
 /** Whether this server can have stems separated; without a stem service the panel stays away. */
 const stems = ref(false)
+/** A finished separation, ready to go into the next Logic project. */
+const stemJob = ref<string | null>(null)
 void stemsAvailable().then((available) => (stems.value = available))
 
 const presets = ref(loadPresets())
@@ -120,9 +122,12 @@ async function exportLogic(): Promise<void> {
       toConversionOptions(form.value, audioLength.value),
       outputName.value,
       form.value.splitSections,
+      stemJob.value,
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
+    // The server confirmed the import, so the job is gone from the stem service.
+    stemJob.value = null
   } catch (caught) {
     logicError.value =
       caught instanceof LogicExportError
@@ -143,6 +148,7 @@ function reset(): void {
   file.value = null
   audio.value = null
   folderNote.value = null
+  stemJob.value = null
   audioLength.value = null
   form.value = defaultFormState()
   presetName.value = ''
@@ -235,7 +241,7 @@ async function convert(): Promise<void> {
           @select="selectAudio"
           @clear="selectAudio(null)"
         />
-        <StemPanel v-if="stems" :audio="audio" :output-name="outputName" />
+        <StemPanel v-if="stems" v-model:job="stemJob" :audio="audio" :output-name="outputName" />
       </section>
     </div>
 
