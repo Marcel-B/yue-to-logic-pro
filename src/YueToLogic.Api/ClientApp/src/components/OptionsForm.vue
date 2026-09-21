@@ -4,8 +4,12 @@ import type { FormState } from '../options'
 
 const form = defineModel<FormState>({ required: true })
 
+/** The tempo fit needs a recording to measure against, so the switch stays off without one. */
+defineProps<{ hasAudio: boolean }>()
+
 const octaves = [-4, -3, -2, -1, 0, 1, 2, 3, 4]
 const bassOctaves = [-2, -1, 0, 1, 2]
+const countInBars = [0, 1, 2, 4]
 
 function signed(value: number): string {
   return value > 0 ? `+${value}` : String(value)
@@ -182,11 +186,34 @@ function signed(value: number): string {
     </fieldset>
 
     <fieldset>
+      <legend>{{ t('countIn') }}</legend>
+      <div class="row">
+        <label>
+          {{ t('countInBars') }}
+          <select v-model.number="form.countIn">
+            <option v-for="value in countInBars" :key="value" :value="value">
+              {{ value === 0 ? t('countInOff') : value }}
+            </option>
+          </select>
+        </label>
+      </div>
+      <label class="check" :class="{ disabled: form.countIn === 0 }">
+        <input v-model="form.countInClick" type="checkbox" :disabled="form.countIn === 0" />
+        {{ t('countInClick') }}
+      </label>
+    </fieldset>
+
+    <fieldset>
       <legend>{{ t('logicProject') }}</legend>
       <label class="check">
         <input v-model="form.splitSections" type="checkbox" />
         {{ t('splitSections') }}
       </label>
+      <label class="check" :class="{ disabled: !hasAudio }">
+        <input v-model="form.fitTempo" type="checkbox" :disabled="!hasAudio" />
+        {{ t('fitTempo') }}
+      </label>
+      <p class="muted hint">{{ hasAudio ? t('fitTempoHint') : t('fitTempoNeedsAudio') }}</p>
     </fieldset>
 
     <details>

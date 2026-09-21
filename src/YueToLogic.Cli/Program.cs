@@ -66,11 +66,25 @@ catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
     return ExitUsageOrIoError;
 }
 
+// The library does the arithmetic but never touches a file, so the recording is measured here.
+TempoFitOptions? fitTempo = null;
+if (options.FitTempo)
+{
+    var audio = await ReadAudioInfoAsync(logicAudioPath!);
+    if (audio is null)
+    {
+        return ExitUsageOrIoError;
+    }
+
+    fitTempo = new TempoFitOptions { AudioSeconds = audio.DurationSeconds };
+}
+
 var result = new ScoreConverter().Convert(abc, new ConversionOptions
 {
     TicksPerQuarterNote = options.TicksPerQuarterNote,
     IncludeChordTrack = options.IncludeChords,
     Arrangement = options.ToArrangementOptions(),
+    FitTempo = fitTempo,
 });
 
 PrintDiagnostics(result.Diagnostics);
@@ -136,6 +150,29 @@ async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPat
         Console.Error.WriteLine(text.Format(text.WriteFailed, packagePath, ex.Message));
         return false;
     }
+}
+
+/// <summary>Reads the STREAMINFO of a FLAC file, whose length the tempo fit is measured against.</summary>
+async Task<FlacStreamInfo?> ReadAudioInfoAsync(string path)
+{
+    try
+    {
+        var header = new byte[FlacStreamInfo.HeaderLength];
+        await using var stream = File.OpenRead(path);
+        var read = await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false);
+        if (FlacStreamInfo.TryParse(header.AsSpan(0, read), out var info))
+        {
+            return info;
+        }
+
+        Console.Error.WriteLine(text.Format(text.AudioUnreadable, path));
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine(text.Format(text.ReadFailed, path, ex.Message));
+    }
+
+    return null;
 }
 
 async Task<bool> TryWriteAsync(string path, Func<Task> write)
