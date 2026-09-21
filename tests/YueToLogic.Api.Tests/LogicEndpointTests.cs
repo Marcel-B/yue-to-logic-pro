@@ -75,7 +75,48 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         Assert.DoesNotContain(entries, e => e.EndsWith("audio.flac", StringComparison.Ordinal));
     }
 
-    private static MultipartFormDataContent Form(string score, byte[]? audio, string? name = null)
+    [Fact]
+    public async Task Splitting_at_sections_gives_every_track_one_region_per_section()
+    {
+        // Without options only the vocal and the chords carry notes, and the sample has two sections: those two
+        // tracks get a region each per section, the three empty ones keep their single region, plus the audio.
+        var plain = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273)));
+        var split = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), splitSections: true));
+
+        Assert.Equal(HttpStatusCode.OK, split.StatusCode);
+        Assert.Equal(6, await PlacementCountAsync(plain));
+        Assert.Equal(1 + (2 * 2) + 3, await PlacementCountAsync(split));
+    }
+
+    /// <summary>The regions the project's arrangement holds: 80 bytes each, before its 16-byte terminator.</summary>
+    private static async Task<int> PlacementCountAsync(HttpResponseMessage response)
+    {
+        using var archive = new ZipArchive(await response.Content.ReadAsStreamAsync());
+        await using var stream = archive.Entries.Single(e => e.FullName.EndsWith("/Alternatives/000/ProjectData", StringComparison.Ordinal)).Open();
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        var data = buffer.ToArray();
+
+        // Chunks: a 24-byte file header, then a 36-byte header each; the arrangement is class 23, object 4.
+        var offset = 24;
+        while (offset < data.Length)
+        {
+            var length = (int)BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(offset + 28, 8));
+            var tag = new string(Encoding.ASCII.GetString(data, offset, 4).Reverse().ToArray());
+            if (tag == "EvSq"
+                && BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 6, 2)) == 23
+                && BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 10, 4)) == 4)
+            {
+                return (length - 16) / 80;
+            }
+
+            offset += 36 + length;
+        }
+
+        throw new InvalidOperationException("The project has no arrangement.");
+    }
+
+    private static MultipartFormDataContent Form(string score, byte[]? audio, string? name = null, bool? splitSections = null)
     {
         var form = new MultipartFormDataContent();
         var scoreContent = new StringContent(score, Encoding.UTF8);
@@ -91,6 +132,11 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         if (name is not null)
         {
             form.Add(new StringContent(name), "name");
+        }
+
+        if (splitSections is { } split)
+        {
+            form.Add(new StringContent(split ? "true" : "false"), "splitSections");
         }
 
         return form;

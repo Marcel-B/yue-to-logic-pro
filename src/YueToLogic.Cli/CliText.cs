@@ -19,6 +19,9 @@ internal sealed class CliText
     public required string InvalidBassPattern { get; init; }
     public required string InvalidDrumPattern { get; init; }
     public required string InvalidChordPattern { get; init; }
+    public required string InvalidChordVoicing { get; init; }
+    public required string InvalidSwingUnit { get; init; }
+    public required string InvalidPercent { get; init; }
     public required string InputNotFound { get; init; }
     public required string OutputExists { get; init; }
     public required string ReadFailed { get; init; }
@@ -85,6 +88,23 @@ internal sealed class CliText
                                       open hi-hat on 4+), half-time, disco; implies --drums
                   --chord-pattern <p> How the chords are played: block (default, as written), eighths, offbeat,
                                       arpeggio
+                  --chord-voicing <v> Inversion of the chords: root (default), closest (smooth voice leading),
+                                      first, second
+                  --chord-octave <n>  Move the chord track by n octaves (-2 to 2)
+                  --no-crash          No crash cymbal at the start of a section
+                  --guide-tones       Add a held track of each chord's third and seventh (a pad)
+                  --guide-octave <n>  Move the guide tones by n octaves (-2 to 2); implies --guide-tones
+                  --double-vocal      Double the vocal melody an octave below, on a track of its own
+                  --double-octave <n> Octave of that copy (-2 to 2, default -1); implies --double-vocal
+                  --swing <n>         Swing in percent: 0 straight (default), 100 a full triplet feel
+                  --swing-unit <u>    Which subdivision swings: eighths (default), sixteenths
+                  --straight-drums    Keep the drums on the grid while everything else swings
+                  --humanize <n>      Vary timing and velocity by n percent (0 default, 100 = 25 ms)
+                  --mono              Prepare the melodies for monophonic synthesizers: one note at a time,
+                                      a gap before the next one, no note too short to sound
+                  --legato            As --mono, but every note also reaches to the next one
+                  --logic-split-sections
+                                      One region per song section in the Logic project, named after it
                   --ppq <n>           MIDI resolution in ticks per quarter note (default: 480)
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
                   --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
@@ -104,6 +124,9 @@ internal sealed class CliText
         InvalidBassPattern = "Unknown bass pattern '{0}'; expected one of: {1}.",
         InvalidDrumPattern = "Unknown drum pattern '{0}'; expected one of: {1}.",
         InvalidChordPattern = "Unknown chord pattern '{0}'; expected one of: {1}.",
+        InvalidChordVoicing = "Unknown chord voicing '{0}'; expected one of: {1}.",
+        InvalidSwingUnit = "Unknown swing unit '{0}'; expected one of: {1}.",
+        InvalidPercent = "Invalid {0} value '{1}'; expected a whole number between 0 and 100.",
         InputNotFound = "Input file not found: {0}",
         OutputExists = "Output file already exists: {0} (use --force to overwrite)",
         ReadFailed = "Could not read {0}: {1}",
@@ -157,6 +180,22 @@ internal sealed class CliText
                   --drum-pattern <p>  Groove: four-on-the-floor (Standard), backbeat (Kick 1+3, Snare 2+4,
                                       offene Hi-Hat auf 4+), half-time, disco; schließt --drums ein
                   --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, offbeat, arpeggio
+                  --chord-voicing <v> Akkordlage: root (Standard), closest (weiche Stimmführung), first, second
+                  --chord-octave <n>  Akkordspur um n Oktaven verschieben (-2 bis 2)
+                  --no-crash          Kein Crash-Becken zu Beginn eines Abschnitts
+                  --guide-tones       Liegende Spur aus Terz und Septime jedes Akkords hinzufügen (Fläche)
+                  --guide-octave <n>  Diese Spur um n Oktaven verschieben (-2 bis 2); schließt --guide-tones ein
+                  --double-vocal      Gesangsmelodie eine Oktave tiefer auf einer eigenen Spur verdoppeln
+                  --double-octave <n> Oktave dieser Kopie (-2 bis 2, Standard -1); schließt --double-vocal ein
+                  --swing <n>         Swing in Prozent: 0 gerade (Standard), 100 volles Triolenfeeling
+                  --swing-unit <e>    Welche Unterteilung swingt: eighths (Standard), sixteenths
+                  --straight-drums    Schlagzeug gerade lassen, während alles andere swingt
+                  --humanize <n>      Timing und Anschlag um n Prozent streuen (0 Standard, 100 = 25 ms)
+                  --mono              Melodien für monophone Synthesizer aufbereiten: immer nur ein Ton,
+                                      Lücke vor dem nächsten, keine zu kurzen Noten
+                  --legato            Wie --mono, zusätzlich reicht jede Note bis zur nächsten
+                  --logic-split-sections
+                                      Im Logic-Projekt eine Region pro Songabschnitt, nach ihm benannt
                   --ppq <n>           MIDI-Auflösung in Ticks pro Viertelnote (Standard: 480)
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
                   --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
@@ -176,6 +215,9 @@ internal sealed class CliText
         InvalidBassPattern = "Unbekanntes Bassmuster '{0}'; erlaubt sind: {1}.",
         InvalidDrumPattern = "Unbekanntes Schlagzeugmuster '{0}'; erlaubt sind: {1}.",
         InvalidChordPattern = "Unbekanntes Akkordmuster '{0}'; erlaubt sind: {1}.",
+        InvalidChordVoicing = "Unbekannte Akkordlage '{0}'; erlaubt sind: {1}.",
+        InvalidSwingUnit = "Unbekannte Swing-Einheit '{0}'; erlaubt sind: {1}.",
+        InvalidPercent = "Ungültiger Wert für {0}: '{1}'; erwartet wird eine ganze Zahl zwischen 0 und 100.",
         InputNotFound = "Eingabedatei nicht gefunden: {0}",
         OutputExists = "Ausgabedatei existiert bereits: {0} (mit --force überschreiben)",
         ReadFailed = "{0} konnte nicht gelesen werden: {1}",

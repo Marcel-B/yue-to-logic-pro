@@ -59,7 +59,13 @@ async function exportLogic(): Promise<void> {
   logicError.value = null
   logicWarnings.value = []
   try {
-    const exported = await exportLogicProject(file.value, audio.value, toConversionOptions(form.value), outputName.value)
+    const exported = await exportLogicProject(
+      file.value,
+      audio.value,
+      toConversionOptions(form.value),
+      outputName.value,
+      form.value.splitSections,
+    )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
   } catch (caught) {

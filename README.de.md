@@ -38,10 +38,25 @@ MIDI:        /…/score.mid
 | `--octave <n>` | Beide Melodien um `n` Oktaven verschieben (−4 bis 4) |
 | `--vocal-octave <n>`, `--ins-octave <n>` | Nur eine Melodie verschieben; hat Vorrang vor `--octave` |
 | `--bass` | Bassspur hinzufügen (siehe unten) |
-| `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`; schließt `--bass` ein |
+| `--bass-pattern <p>` | Bassrhythmus: `eighths` (Standard), `quarters`, `root-fifth`, `octaves`, `offbeat`, `sustained`; schließt `--bass` ein |
 | `--bass-octave <n>` | Bass um `n` Oktaven verschieben (−2 bis 2); schließt `--bass` ein |
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
-| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`; schließt `--drums` ein |
+| `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`; schließt `--drums` ein |
+| `--no-crash` | Kein Crash-Becken zu Beginn eines Abschnitts |
+| `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `offbeat`, `arpeggio` |
+| `--chord-voicing <v>` | Lage der Akkorde: `root` (Standard), `closest`, `first`, `second` (siehe unten) |
+| `--chord-octave <n>` | Akkordspur um `n` Oktaven verschieben (−2 bis 2) |
+| `--guide-tones` | Liegende Spur aus Terz und Septime jedes Akkords hinzufügen (siehe unten) |
+| `--guide-octave <n>` | Diese Spur um `n` Oktaven verschieben (−2 bis 2); schließt `--guide-tones` ein |
+| `--double-vocal` | Gesangsmelodie eine Oktave tiefer auf einer eigenen Spur verdoppeln |
+| `--double-octave <n>` | Oktave dieser Kopie (−2 bis 2, Standard −1); schließt `--double-vocal` ein |
+| `--swing <n>` | Swing in Prozent: `0` gerade (Standard), `100` volles Triolenfeeling |
+| `--swing-unit <e>` | Welche Unterteilung swingt: `eighths` (Standard), `sixteenths` |
+| `--straight-drums` | Schlagzeug gerade lassen, während alles andere swingt |
+| `--humanize <n>` | Timing und Anschlag um `n` Prozent streuen (0 Standard; 100 verschiebt eine Note um bis zu 25 ms) |
+| `--mono` | Melodien für monophone Synthesizer aufbereiten (siehe unten) |
+| `--legato` | Wie `--mono`, zusätzlich reicht jede Note bis zur nächsten |
+| `--logic-split-sections` | Im Logic-Projekt eine Region pro Songabschnitt statt einer pro Spur |
 | `--ppq <n>` | MIDI-Auflösung in Ticks pro Viertelnote (Standard 480) |
 | `--logic <audio.flac>` | Zusätzlich ein Logic-Pro-Projekt `<ausgabe>.logicx` mit allen Spuren und diesem Audio schreiben (siehe unten) |
 | `--logic-no-audio` | Zusätzlich ein Logic-Pro-Projekt ohne Audio schreiben; die Audiospur bleibt leer |
@@ -84,7 +99,7 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
 |---|---|---|
 | `POST /api/convert` | Multipart-Formular: `file` (der Score), optional `options` (JSON, siehe unten) | `200` mit Score, Meldungen und `midi` (Base64) als JSON; `422` mit Meldungen, wenn Score oder Optionen unbrauchbar sind; `400` bei fehlender Datei oder fehlerhaften Optionen |
 | `POST /api/convert/midi` | wie oben | die MIDI-Datei (`audio/midi`) |
-| `POST /api/convert/logic` | wie oben, optional `audio` (die `audio.flac`, bis 250 MB) und `name` | ein ZIP mit `<name>.logicx`; Hinweise im Header `X-YueToLogic-Diagnostics`; `422`, wenn das Audio kein FLAC mit 48 kHz ist |
+| `POST /api/convert/logic` | wie oben, optional `audio` (die `audio.flac`, bis 250 MB), `name` und `splitSections` (`true` für eine Region pro Songabschnitt) | ein ZIP mit `<name>.logicx`; Hinweise im Header `X-YueToLogic-Diagnostics`; `422`, wenn das Audio kein FLAC mit 48 kHz ist |
 | `GET /api/health` | – | `ok` |
 
 `options` ist die JSON-Form von `ConversionOptions`; jedes Feld ist optional:
@@ -98,10 +113,23 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
     "octaveShifts": { "Vocal": -1 },
     "bass": { "pattern": "Eighths", "octaveShift": 0 },
     "drums": { "pattern": "Backbeat", "crashOnSections": true },
-    "chords": { "pattern": "Offbeat", "octaveShift": 0 }
+    "chords": { "pattern": "Offbeat", "inversion": "Closest", "octaveShift": 0 },
+    "guideTones": { "octaveShift": 0, "velocity": 64 },
+    "doubling": { "voiceId": "Vocal", "semitones": -12, "velocity": 80 },
+    "groove": {
+      "swing": 0.55,
+      "swingUnit": "Eighths",
+      "humanizeTimingMs": 10,
+      "humanizeVelocity": 8,
+      "seed": 1,
+      "includeDrums": true
+    },
+    "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true }
   }
 }
 ```
+
+`splitSections` gehört zum Logic-Projekt und nicht zum Score und ist deshalb ein eigenes Formularfeld statt Teil von `options`.
 
 ```sh
 curl -F file=@score.abc -F 'options={"arrangement":{"drums":{}}}' http://localhost:5080/api/convert/midi -o score.mid
@@ -112,6 +140,8 @@ Clients, die von einem anderen Origin ausgeliefert werden (z. B. eine Electron-H
 ## Logic-Pro-Projekt (experimentell)
 
 Mit der `audio.flac` von YuE (CLI `--logic`, Weboberfläche: zweite Drop-Zone, dann *Logic-Projekt herunterladen*) entsteht ein komplettes Logic-Pro-Projekt: das Audio auf Spur 1 ab Takt 1, die Spuren Vocal, Ins, Chords, Bass und Drums als MIDI-Regionen, die Abschnitte des Songs als Arrangement-Marker und jeder Akkord auf Logics Akkordspur (der die Session Player folgen können), dazu Tempo, Tonart, alle Taktartwechsel und die Projektlänge aus dem Score. Ohne Audio (CLI `--logic-no-audio`, Weboberfläche: einfach keine `audio.flac` auswählen) entsteht dasselbe Projekt mit leerer Audiospur, auf die sich das FLAC später ziehen lässt; das Audiodatei-Objekt der Vorlage und seine Region werden dabei entfernt, sonst meldet Logic beim Öffnen eine fehlende Datei.
+
+Mit `--logic-split-sections` (Weboberfläche: *Eine Region pro Abschnitt statt einer pro Spur*) wird jede Spur an den Abschnittsgrenzen geteilt, statt als eine Region durchzulaufen: Die Regionen heißen nach dem Abschnitt, den sie abdecken, und werden nummeriert, wenn ein Name wiederkehrt (`Verse 1`, `Chorus 1`, `Verse 2`, …). So lässt sich ein Abschnitt einzeln kopieren, loopen, stummschalten oder verschieben. Eine Spur, für die der Score nichts hergibt, behält ihre eine leere Region, und eine Note über eine Abschnittsgrenze hinaus behält ihre Länge – die Region wächst mit, statt die Note zu beschneiden. Das Audio bleibt eine Region ab Takt 1.
 
 Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus einer von Logic Pro 12.3 gespeicherten Vorlage (`src/YueToLogic.Core/Logic/Template`), in der Noten, Längen, Tempo, Taktart, Marker, Akkorde und Audio ersetzt werden; Akkordregionen und Markernamen über die der Vorlage hinaus werden als neue Objekte angelegt und so registriert, wie Logic es selbst tut. Die in der Vorlage gewählten Instrumente gelten für jedes Projekt. Das Format wurde analysiert und jede Änderung durch Öffnen, Bearbeiten, Speichern und erneutes Öffnen in Logic geprüft. Grenzen: Das Audio muss 48 kHz haben, und die Akkordskalen für die Session Player sind ein Standard je Akkordart. Eine künftige Logic-Version kann eine neu gespeicherte Vorlage erfordern.
 
@@ -155,11 +185,19 @@ Eine Standard-MIDI-Datei vom Typ 1:
 | `Conductor` | Tempo, Taktart, Tonart und ein Marker pro Abschnitt (`verse`, `chorus`, …); Logic übernimmt sie in die globalen Spuren |
 | `Vocal` | Die Gesangsmelodie |
 | `Ins` | Die Instrumentalmelodie |
-| `Chords` | Die Akkordsymbole als Blockakkorde (Grundton in Oktave 3, Slash-Bass darunter), zusätzlich das Symbol als Text-Event. Mit `--chord-pattern` stattdessen `eighths` (der ganze Akkord auf jeder Achtel), `offbeat` (kurze Akkorde nur auf den Gegenschlägen) oder `arpeggio` (die Akkordtöne nacheinander in Achteln aufwärts) |
+| `Chords` | Die Akkordsymbole als Blockakkorde (Grundton in Oktave 3, Slash-Bass darunter), zusätzlich das Symbol als Text-Event. Mit `--chord-pattern` stattdessen `eighths` (der ganze Akkord auf jeder Achtel), `offbeat` (kurze Akkorde nur auf den Gegenschlägen) oder `arpeggio` (die Akkordtöne nacheinander in Achteln aufwärts). `--chord-voicing` wählt die Umkehrung: `first` und `second` liegen fest, `closest` legt jeden Akkord dorthin, wo er dem vorigen am nächsten liegt, sodass die Spur nicht mehr bei jedem Wechsel eine Oktave springt. Jede Lage hält ihren tiefsten Akkordton innerhalb einer Oktave, damit die Spur nicht aus ihrem Register wandert |
 | `Bass` | Nur mit `--bass`: der Basston jedes Akkords im Register E2–D♯3 (MIDI 40–51, in Logics Benennung E1–D♯2), das jedes Bassinstrument spielen kann; mit `--bass-octave -1` geht es bis zur tiefsten E-Bass-Saite hinunter. Slash-Akkorde wie `C/E` spielen ihren Basston. Die Noten sind leicht gekürzt, Zählzeiten etwas lauter. `root-fifth` wechselt in Vierteln zwischen Basston und Quinte des Akkords, `octaves` in Achteln mit der Oktave darüber, `offbeat` spielt nur die Achtel-Gegenschläge und `sustained` einen langen Ton je Akkord |
+| `Guide` | Nur mit `--guide-tones`: Terz und Septime jedes Akkords – bei Dreiklängen die Quinte –, liegend gehalten, solange beide Töne gleich bleiben. Das sind die zwei Töne, die einen Akkord von seinen Nachbarn unterscheiden; die Spur wird damit zur Fläche oder Streicherlinie, während Bass und Schlagzeug den Rhythmus tragen |
+| `Vocal 8vb` | Nur mit `--double-vocal`: die Gesangsmelodie noch einmal, eine Oktave tiefer (oder wohin `--double-octave` sie legt), als zweite Stimme für ein weiteres Instrument |
 | `Drums` | Nur mit `--drums`: *Four on the Floor* spielt die Bassdrum auf jedem Schlag, *Backbeat* auf 1 und 3 mit offener Hi-Hat auf der letzten Achtel (4+), *Half-Time* nur auf der 1 mit Snare auf 3, *Disco* auf jedem Schlag mit offener Hi-Hat auf allen Gegenschlägen. Die anderen spielen die Snare auf 2 und 4, eine geschlossene Hi-Hat in Achteln (Offbeats leiser) und ein Crash-Becken zu Beginn jedes Abschnitts. General-MIDI-Notennummern auf Kanal 10, die Logics Drumkits verstehen. Im 3/4-Takt spielt die Snare auf 2; 6/8 wird in punktierten Vierteln gezählt |
 
-Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"` bzw. `"Drums"`. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
+`--swing` und `--humanize` wirken auf jede Spur, sobald sie erzeugt ist: Swing verzögert die Gegenschläge und kürzt sie um denselben Betrag, sodass die folgende Note ihren Platz behält; die Humanisierung verschiebt jede Note ein wenig und streut den Anschlag. Beides verändert die Noten selbst und nicht eine Wiedergabeeinstellung, sodass MIDI-Datei, JSON-Ausgabe und Logic-Projekt dasselbe Timing tragen. Die Humanisierung läuft mit festem Startwert, derselbe Score und dieselben Parameter ergeben also immer dieselbe Datei.
+
+`--mono` bereitet die Melodiespuren – und den Bass – für monophone Synthesizer auf. Drei Dinge stehen dem sonst im Weg: zwei gleichzeitig klingende Töne, von denen der Synth einen verwirft; sich berührende Noten, bei denen die Hüllkurve nie neu ausgelöst wird und zwei Töne als ein langes Gleiten herauskommen; und Noten, die so kurz sind, dass eine langsame Hüllkurve gar nicht öffnet. Die Aufbereitung lässt immer nur einen Ton klingen, hält vor dem nächsten Anschlag eine kurze Lücke und dehnt die kürzesten Noten. `--legato` lässt zusätzlich jede Note bis zur nächsten reichen, sodass die Spur zu einer durchgehenden Folge von Gates wird. Sie läuft nach dem Groove, damit ihre Zusagen auch für das gelten, was am Ende geschrieben wird.
+
+Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
+
+Die Logic-Vorlage hat fünf MIDI-Spuren; Guide-Tone- und Dopplungsspur landen deshalb in der MIDI-Datei, aber nicht im Logic-Projekt – eine Warnung (`YTL053`) weist darauf hin. Eine Vorlage mit Spuren namens `Guide` und `Vocal 8vb` nimmt auch sie auf.
 
 ## Das Eingabeformat
 
@@ -207,4 +245,8 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
+- **Fit Tempo:** das Tempo aus der Länge der `audio.flac` ableiten, damit Audio und MIDI über den ganzen Song zusammenbleiben. Heute wird eine Abweichung nur gemeldet (`YTL052`).
+- **Count-in-Takt** vor Takt 1, damit beim Einspielen in Hardware ein Vorlauf da ist.
+- **Batch-/Ordner-Modus** für mehrere Scores, da ein YuE-Lauf meist mehrere Takes hinterlässt.
+- **Score-Vorschau in der Weboberfläche:** `ScoreDocument` wird genau dafür schon als JSON serialisiert; eine Piano-Roll mit Wiedergabe würde vor dem Umweg über Logic zeigen, ob Lage, Muster und Akkorde passen.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.
