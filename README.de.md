@@ -57,6 +57,9 @@ MIDI:        /…/score.mid
 | `--mono` | Melodien für monophone Synthesizer aufbereiten (siehe unten) |
 | `--legato` | Wie `--mono`, zusätzlich reicht jede Note bis zur nächsten |
 | `--logic-split-sections` | Im Logic-Projekt eine Region pro Songabschnitt statt einer pro Spur |
+| `--count-in <n>` | Stille Takte vor dem Song (0 bis 8), mit Klick auf jedem Schlag (siehe unten) |
+| `--count-in-silent` | Kein Klick in diesen Takten; schließt `--count-in 1` ein |
+| `--fit-tempo` | Tempo so anpassen, dass der Score so lang ist wie das mit `--logic` angegebene Audio (siehe unten) |
 | `--ppq <n>` | MIDI-Auflösung in Ticks pro Viertelnote (Standard 480) |
 | `--logic <audio.flac>` | Zusätzlich ein Logic-Pro-Projekt `<ausgabe>.logicx` mit allen Spuren und diesem Audio schreiben (siehe unten) |
 | `--logic-no-audio` | Zusätzlich ein Logic-Pro-Projekt ohne Audio schreiben; die Audiospur bleibt leer |
@@ -135,8 +138,10 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
       "seed": 1,
       "includeDrums": true
     },
-    "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true }
-  }
+    "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true },
+    "countIn": { "bars": 1, "click": true }
+  },
+  "fitTempo": { "audioSeconds": 352.68, "maxDeviation": 0.05 }
 }
 ```
 
@@ -210,6 +215,31 @@ Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`Conversi
 
 Die Logic-Vorlage hat fünf MIDI-Spuren; Guide-Tone- und Dopplungsspur landen deshalb in der MIDI-Datei, aber nicht im Logic-Projekt – eine Warnung (`YTL053`) weist darauf hin. Eine Vorlage mit Spuren namens `Guide` und `Vocal 8vb` nimmt auch sie auf.
 
+## Tempo anpassen
+
+YuEs Audio und sein symbolischer Score sind sich nicht immer einig, wie lang der Song ist. Wo der Unterschied Bruchteile eines Prozents beträgt, liegt der Score schlicht ein wenig daneben, und Audio und MIDI laufen gegen Songende auseinander. `--fit-tempo` dehnt das Tempo so, dass der Score genau so lang wird wie die Aufnahme:
+
+```
+Info YTL060: Tempo fitted to the audio: 105 → 105.479 BPM, so the score's 354.3 s become the audio's 352.7 s.
+```
+
+Ein großer Unterschied bedeutet etwas anderes. YuE bricht die Erzeugung an einer Grenze ab – in den Läufen, gegen die das entwickelt wurde, bei 300 oder 360 Sekunden –, das Audio kann also lange vor dem Score enden, in einem Fall 37 Takte früher. Das Tempo anzupassen würde den ganzen Song in eine Länge pressen, die die Musik nie hatte. Mehr als fünf Prozent werden deshalb gemeldet statt angewandt:
+
+```
+Warnung YTL061: The tempo was not fitted: the score lasts 368.1 s but the audio 300.0 s, a difference of
+22.7 %. That is more than a drift; the audio was probably cut short, or it belongs to another take.
+```
+
+`--fit-tempo` braucht die Aufnahme als Maß und gehört deshalb mit `--logic <audio.flac>` zusammen. Das angepasste Tempo erreicht MIDI-Datei, JSON-Ausgabe und Logic-Projekt gleichermaßen, weil es vor allen dreien angewandt wird. Ein Vorzähler bleibt beim Vergleich außen vor: Die Aufnahme enthält die Musik, nicht die Stille davor. Die Bibliothek selbst öffnet keine Datei – der Host misst das Audio und übergibt `fitTempo.audioSeconds`; in der Weboberfläche liest der Browser die 42 Byte des FLAC-Kopfes, für eine reine MIDI-Konvertierung muss also nichts hochgeladen werden.
+
+Die Weboberfläche bietet dasselbe unter *Tempo an die Audiolänge anpassen* an, und `fitTempo.maxDeviation` weitet die fünf Prozent für eine Aufnahme, von der du weißt, dass sie stimmt.
+
+## Vorzähler
+
+`--count-in <n>` setzt `n` stille Takte vor den Song, damit beim Einspielen in Hardware oder beim Mitschneiden ein Vorlauf da ist. Alles wandert mit der Musik: Noten, Akkorde, Abschnitte sowie jeder Takt- und Tonartwechsel – nur die Taktart und die Tonart, in denen der Song beginnt, bleiben bei Takt 1, denn sie gelten auch für den Vorlauf. Auf jedem Schlag klingt ein Klick, der erste Schlag jedes Takts lauter, als Side Stick auf der Schlagzeugspur (General-MIDI-Note 37); ein Score ohne Schlagzeug bekommt dafür eine Schlagzeugspur, `--count-in-silent` lässt die Takte leer.
+
+Im Logic-Projekt wandert auch das Audio: Die MIDI-Regionen beginnen weiterhin bei Takt 1 und tragen die stillen Takte in sich, während die Aufnahme, die keinen eigenen Vorzähler hat, dort beginnt, wo die Musik einsetzt. Mit `--logic-split-sections` wird der Vorlauf zu einer eigenen Region vor dem ersten Abschnitt.
+
 ## Das Eingabeformat
 
 YuE2 schreibt eine bewusst kleine Teilmenge der ABC-Notation. Ein allgemeiner ABC-Parser würde sie falsch lesen: Vor allem gilt ein Vorzeichen für seinen Notenbuchstaben **in allen Oktaven** bis zum Taktstrich (nach `^F` ist auch `f` erhöht). Der Parser in diesem Projekt folgt den YuE2-Regeln und meldet alles, was davon abweicht, als Diagnose, statt abzubrechen – auch von Hand bearbeitete Scores lassen sich also konvertieren. Die vollständigen Regeln stehen in der [ABC-Referenz von YuE2](https://github.com/multimodal-art-projection/YuE/blob/main/skills/yue2-music/references/abc-editing.md).
@@ -256,7 +286,5 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-- **Fit Tempo:** das Tempo aus der Länge der `audio.flac` ableiten, damit Audio und MIDI über den ganzen Song zusammenbleiben. Heute wird eine Abweichung nur gemeldet (`YTL052`).
-- **Count-in-Takt** vor Takt 1, damit beim Einspielen in Hardware ein Vorlauf da ist.
 - **Batch-/Ordner-Modus** für mehrere Scores, da ein YuE-Lauf meist mehrere Takes hinterlässt.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.

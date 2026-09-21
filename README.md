@@ -57,6 +57,9 @@ MIDI:        /…/score.mid
 | `--mono` | Prepare the melodies for monophonic synthesizers (see below) |
 | `--legato` | As `--mono`, and every note reaches to the next one |
 | `--logic-split-sections` | One region per song section in the Logic project instead of one per track |
+| `--count-in <n>` | Silent bars in front of the song (0 to 8), with a click on every beat (see below) |
+| `--count-in-silent` | No click in those bars; implies `--count-in 1` |
+| `--fit-tempo` | Adjust the tempo so the score lasts as long as the audio given with `--logic` (see below) |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
 | `--logic-no-audio` | Also write a Logic Pro project without audio; its audio track stays empty |
@@ -135,8 +138,10 @@ If the frontend is built separately, for example in its own Docker stage, pass `
       "seed": 1,
       "includeDrums": true
     },
-    "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true }
-  }
+    "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true },
+    "countIn": { "bars": 1, "click": true }
+  },
+  "fitTempo": { "audioSeconds": 352.68, "maxDeviation": 0.05 }
 }
 ```
 
@@ -210,6 +215,31 @@ The arrangement options are also available in the library (`ConversionOptions.Ar
 
 The Logic template has five MIDI tracks, so the guide-tone and doubling tracks reach the MIDI file but not the Logic project; a warning (`YTL053`) says so. A template saved with tracks named `Guide` and `Vocal 8vb` takes them as well.
 
+## Fitting the tempo
+
+YuE's audio and its symbolic score do not always agree on how long the song is. Where the difference is a fraction of a percent the score is simply a little off, and audio and MIDI drift apart towards the end of the song. `--fit-tempo` stretches the tempo so the score lasts exactly as long as the recording:
+
+```
+Info YTL060: Tempo fitted to the audio: 105 → 105.479 BPM, so the score's 354.3 s become the audio's 352.7 s.
+```
+
+A large difference means something else. YuE stops generating at a limit — 300 or 360 seconds in the runs this was built against — so the audio can end long before the score does, in one case 37 bars early. Fitting the tempo would then compress the whole song into a length the music never had. Anything more than five percent is therefore reported and left alone:
+
+```
+Warning YTL061: The tempo was not fitted: the score lasts 368.1 s but the audio 300.0 s, a difference of
+22.7 %. That is more than a drift; the audio was probably cut short, or it belongs to another take.
+```
+
+`--fit-tempo` needs the recording to measure and therefore goes together with `--logic <audio.flac>`. The fitted tempo reaches the MIDI file, the JSON dump and the Logic project alike, since it is applied before any of them is written. A count-in is left out of the comparison: the recording holds the music, not the silence in front of it. The library itself never opens a file — the host measures the audio and passes `fitTempo.audioSeconds`; in the web interface the browser reads the 42-byte FLAC header, so nothing has to be uploaded for a MIDI-only conversion.
+
+The web interface offers the same under *Fit the tempo to the audio length*, and `fitTempo.maxDeviation` widens the five percent for a recording you know is right.
+
+## Count-in
+
+`--count-in <n>` puts `n` silent bars in front of the song, so there is a lead-in when playing the parts into hardware or recording along. Everything moves with the music: notes, chords, sections, and every meter and key change — only the signature and key the song opens in stay at bar 1, since they govern the lead-in as well. A click sounds on every beat, the downbeat of each bar harder, as a side stick on the drum track (General MIDI note 37); a score without drums gets a drum track for it, `--count-in-silent` leaves the bars empty.
+
+In a Logic project the audio moves too: the MIDI regions still begin at bar 1 and carry the silent bars inside them, while the recording, which has no count-in of its own, starts where the music does. With `--logic-split-sections` the lead-in becomes a region of its own in front of the first section.
+
 ## The input format
 
 YuE2 writes a deliberately small subset of ABC notation. A generic ABC parser would misread it: most importantly, an accidental applies to its note letter **in every octave** until the bar line (after `^F`, `f` is sharp too). The parser in this project follows the YuE2 rules and reports everything outside them as a diagnostic instead of failing, so hand-edited scores still convert. The full rules are described in [YuE2's ABC editing reference](https://github.com/multimodal-art-projection/YuE/blob/main/skills/yue2-music/references/abc-editing.md).
@@ -256,7 +286,5 @@ The GitHub Action in `.github/workflows/ci.yml` runs the same steps on every pus
 
 ## Next steps
 
-- **Fit tempo:** derive the tempo from the length of the `audio.flac` so that audio and MIDI stay together over the whole song. Today a difference is only reported (`YTL052`).
-- **Count-in bar** before bar 1, so there is a lead-in when playing the parts into hardware.
 - **Batch mode** for a folder of scores, since a YuE run usually leaves several takes.
 - More accompaniment patterns for drums, chords and bass, whenever working with the tool calls for them.
