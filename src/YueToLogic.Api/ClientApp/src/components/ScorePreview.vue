@@ -141,6 +141,17 @@ function toggle(): void {
   }
 }
 
+/** Back to bar 1, scrolled home; playback carries on from there if it was running. */
+function rewind(): void {
+  playhead.value = 0
+  viewport.value?.scrollTo({ left: 0 })
+  if (playing.value) {
+    play(0)
+  } else {
+    render()
+  }
+}
+
 /** Lifts every key on every output; the way out when an instrument hangs on a note. */
 function panic(): void {
   stop()
@@ -283,6 +294,15 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
       <div class="controls">
         <button type="button" class="button primary small" :aria-pressed="playing" @click="toggle">
           {{ playing ? t('previewStop') : t('previewPlay') }}
+        </button>
+        <button
+          type="button"
+          class="button secondary small"
+          :title="t('previewRewindTitle')"
+          :disabled="!playing && !playhead"
+          @click="rewind"
+        >
+          {{ t('previewRewind') }}
         </button>
         <button type="button" class="button secondary small" :title="t('previewPanicTitle')" @click="panic">
           {{ t('previewPanic') }}

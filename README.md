@@ -161,7 +161,9 @@ With `--logic-split-sections` (web interface: *One region per section instead of
 
 Logic's project format is undocumented. The project is therefore built from a template saved by Logic Pro 12.3 (`src/YueToLogic.Core/Logic/Template`), whose notes, lengths, tempo, meter, markers, chords and audio are replaced; chord regions and marker names beyond the template's are added as new objects, registered the way Logic does it. The instruments chosen in that template are used for every project. The format was analysed and every change verified by opening, editing, saving and reopening the result in Logic. Limitations: the audio must be 48 kHz, and the chord scales offered to Session Players are a default per chord type. A future Logic version may need a newly saved template.
 
-To use your own sounds, create a template the same way: open a MIDI file from this tool in Logic (*File → Open*), drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`).
+Each track is named after the part it carries — `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` — rather than after the instrument the template happens to use, since the regions now carry the section names instead. Logic keeps a track's name on its channel strip, so this renames those; the audio track and the output bus keep theirs.
+
+**Your own sounds, and further tracks.** The tracks a project has come from the template, so adding one there adds it everywhere. Convert your score once with the tracks you want (`--guide-tones`, `--double-vocal`), open the MIDI file in Logic (*File → Open*), which names the tracks after it, and build the template from that: drag `audio.flac` onto a new audio track at bar 1, choose instruments, add at least one arrangement marker and one chord on the chord track, save as a package with audio copied into the project, and replace the files in `Logic/Template` (`MetaData.plist` and `ProjectInformation.plist` converted with `plutil -convert xml1`). A track is matched to a voice by name, so keep the names the MIDI file gave them.
 
 ## Container and deployment
 
@@ -213,7 +215,7 @@ A Standard MIDI File, type 1:
 
 The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` or `"Doubling"`. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
 
-The Logic template has five MIDI tracks, so the guide-tone and doubling tracks reach the MIDI file but not the Logic project; a warning (`YTL053`) says so. A template saved with tracks named `Guide` and `Vocal 8vb` takes them as well.
+Which tracks a Logic project has comes from the template, not from this tool, and the one shipped with it has seven: `Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide` and `Vocal 8vb`. A voice the template has no track for — a doubling of the instrumental voice (`Ins 8vb`), say — reaches the MIDI file but not the Logic project; a warning (`YTL053`) says so and lists the tracks the template does have. Saving your own template with a track of that name — see *Logic Pro project* below — fills it as well.
 
 ## Fitting the tempo
 
