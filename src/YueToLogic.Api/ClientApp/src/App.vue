@@ -241,7 +241,13 @@ async function convert(): Promise<void> {
           @select="selectAudio"
           @clear="selectAudio(null)"
         />
-        <StemPanel v-if="stems" v-model:job="stemJob" :audio="audio" :output-name="outputName" />
+        <StemPanel
+          v-if="stems"
+          v-model:job="stemJob"
+          :audio="audio"
+          :output-name="outputName"
+          @export-logic="exportLogic"
+        />
       </section>
     </div>
 
