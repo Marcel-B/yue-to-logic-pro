@@ -49,7 +49,7 @@ public static class ConvertEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes + MaxScoreBytes + 64 * 1024))
             .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes)
             .WithName("ConvertToLogic")
-            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project.");
+            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section.");
 
         return api;
     }
@@ -59,6 +59,7 @@ public static class ConvertEndpoints
         IFormFile? audio,
         [FromForm] string? options,
         [FromForm] string? name,
+        [FromForm] bool? splitSections,
         IScoreConverter converter,
         ILogicProjectWriter writer,
         HttpContext context,
@@ -98,7 +99,12 @@ public static class ConvertEndpoints
             await using var audioStream = audio is { Length: > 0 } ? audio.OpenReadStream() : null;
             using (var sink = new ZipLogicPackageSink(zip, packageName))
             {
-                logic = await writer.WriteAsync(result.Score!, audioStream, sink, new LogicProjectOptions { ProjectName = packageName }, cancellationToken);
+                var logicOptions = new LogicProjectOptions
+                {
+                    ProjectName = packageName,
+                    SplitRegionsAtSections = splitSections ?? false,
+                };
+                logic = await writer.WriteAsync(result.Score!, audioStream, sink, logicOptions, cancellationToken);
             }
         }
         catch

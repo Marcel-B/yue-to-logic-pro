@@ -17,7 +17,7 @@ export interface NoteEvent {
   velocity: number | null
 }
 
-export type TrackKind = 'Melody' | 'Chords' | 'Bass' | 'Drums'
+export type TrackKind = 'Melody' | 'Chords' | 'Bass' | 'Drums' | 'GuideTones' | 'Doubling'
 
 export interface VoiceTrack {
   id: string
@@ -78,6 +78,10 @@ export type DrumPattern = 'FourOnTheFloor' | 'Backbeat' | 'HalfTime' | 'Disco'
 
 export type ChordPattern = 'Block' | 'Eighths' | 'Offbeat' | 'ArpeggioUp'
 
+export type ChordInversion = 'RootPosition' | 'Closest' | 'First' | 'Second'
+
+export type SwingUnit = 'Eighths' | 'Sixteenths'
+
 export interface ConversionOptions {
   ticksPerQuarterNote: number
   includeChordTrack: boolean
@@ -86,6 +90,16 @@ export interface ConversionOptions {
     octaveShifts: Record<string, number>
     bass: { pattern: BassPattern; octaveShift: number } | null
     drums: { pattern: DrumPattern; crashOnSections: boolean } | null
-    chords: { pattern: ChordPattern } | null
+    chords: { pattern: ChordPattern; inversion: ChordInversion; octaveShift: number } | null
+    guideTones: { octaveShift: number } | null
+    doubling: { voiceId: string; semitones: number } | null
+    groove: {
+      swing: number
+      swingUnit: SwingUnit
+      includeDrums: boolean
+      humanizeTimingMs: number
+      humanizeVelocity: number
+    } | null
+    mono: { legato: boolean } | null
   }
 }
