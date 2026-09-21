@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { ApiError, convertScore, exportLogicProject, LogicExportError } from './api'
 import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
+import ScorePreview from './components/ScorePreview.vue'
 import FileDropZone from './components/FileDropZone.vue'
 import { locale, setLocale, t } from './i18n'
 import { clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
@@ -193,6 +194,13 @@ async function convert(): Promise<void> {
       </form>
       <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
     </section>
+
+    <ScorePreview
+      v-if="result?.score"
+      :score="result.score"
+      :include-chords="form.includeChords"
+      :stale="stale"
+    />
 
     <ResultView
       v-if="result"
