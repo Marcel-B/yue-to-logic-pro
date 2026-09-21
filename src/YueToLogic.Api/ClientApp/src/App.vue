@@ -24,6 +24,8 @@ const folderNote = ref<string | null>(null)
 const stems = ref(false)
 /** A finished separation, ready to go into the next Logic project. */
 const stemJob = ref<string | null>(null)
+/** A separation in progress; the result view says so next to its Logic button. */
+const stemsRunning = ref(false)
 void stemsAvailable().then((available) => (stems.value = available))
 
 const presets = ref(loadPresets())
@@ -241,7 +243,14 @@ async function convert(): Promise<void> {
           @select="selectAudio"
           @clear="selectAudio(null)"
         />
-        <StemPanel v-if="stems" v-model:job="stemJob" :audio="audio" :output-name="outputName" />
+        <StemPanel
+          v-if="stems"
+          v-model:job="stemJob"
+          v-model:running="stemsRunning"
+          :audio="audio"
+          :output-name="outputName"
+          @export-logic="exportLogic"
+        />
       </section>
     </div>
 
@@ -295,6 +304,8 @@ async function convert(): Promise<void> {
       :output-name="outputName"
       :stale="stale"
       :has-audio="audio !== null"
+      :stems-running="stemsRunning"
+      :stems-ready="stemJob !== null"
       :logic-busy="logicBusy"
       :logic-error="logicError"
       :logic-warnings="logicWarnings"
