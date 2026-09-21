@@ -16,6 +16,8 @@ export interface FormState {
   bassOctave: number
   drums: 'off' | DrumPattern
   crash: boolean
+  /** One track per drum instead of one drum track. */
+  splitDrums: boolean
   /** 'as-written' plays one sustained block chord per symbol, as the score notates it. */
   chordPattern: 'as-written' | ChordPattern
   chordInversion: ChordInversion
@@ -55,6 +57,7 @@ export const defaultFormState = (): FormState => ({
   bassOctave: 0,
   drums: 'off',
   crash: true,
+  splitDrums: false,
   chordPattern: 'as-written',
   chordInversion: 'RootPosition',
   chordOctave: 0,
@@ -114,7 +117,10 @@ export function toConversionOptions(form: FormState, audioLength: number | null 
       defaultOctaveShift: form.octave,
       octaveShifts,
       bass: form.bass === 'off' ? null : { pattern: form.bass, octaveShift: form.bassOctave },
-      drums: form.drums === 'off' ? null : { pattern: form.drums, crashOnSections: form.crash },
+      drums:
+        form.drums === 'off'
+          ? null
+          : { pattern: form.drums, crashOnSections: form.crash, separateTracks: form.splitDrums },
       chords:
         !form.includeChords || plainChords
           ? null
