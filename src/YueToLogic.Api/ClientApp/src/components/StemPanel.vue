@@ -25,7 +25,8 @@ const pollMilliseconds = 5000
 const dereverb = ref(false)
 const status = ref<string | null>(null)
 const error = ref<string | null>(null)
-const busy = ref(false)
+/** Whether a separation is running, which the result view says next to its Logic button. */
+const busy = defineModel<boolean>('running', { required: true })
 const downloading = ref(false)
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 let jobId: string | null = null
