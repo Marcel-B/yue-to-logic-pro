@@ -172,7 +172,7 @@ Logics Projektformat ist nicht dokumentiert. Das Projekt entsteht deshalb aus ei
 
 Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords`, `Bass`, `Drums` –, und nicht nach dem Instrument, das die Vorlage zufällig verwendet, denn die Regionen tragen inzwischen die Abschnittsnamen. Logic führt den Spurnamen am Kanalzug, dieser wird also umbenannt; Audiospur und Stereo-Summe behalten ihren.
 
-**Eigene Klänge und weitere Spuren.** Welche Spuren ein Projekt hat, gibt die Vorlage vor – eine dort ergänzte Spur ist überall vorhanden. Konvertiere den Score einmal mit den gewünschten Spuren (`--guide-tones`, `--double-vocal`), öffne die MIDI-Datei in Logic (*Ablage → Öffnen*), das die Spuren danach benennt, und baue die Vorlage daraus: `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln). Eine Spur wird über ihren Namen einer Stimme zugeordnet, die Namen aus der MIDI-Datei also beibehalten.
+**Eigene Klänge und weitere Spuren.** Welche Spuren ein Projekt hat, gibt die Vorlage vor – eine dort ergänzte Spur ist überall vorhanden. Konvertiere den Score einmal mit den gewünschten Spuren (`--guide-tones`, `--double-vocal`), öffne die MIDI-Datei in Logic (*Ablage → Öffnen*), das die Spuren danach benennt, und baue die Vorlage daraus: `audio.flac` auf eine neue Audiospur bei Takt 1 ziehen, Instrumente wählen, mindestens einen Arrangement-Marker und einen Akkord auf der Akkordspur anlegen, als Paket mit ins Projekt kopierten Audiodateien speichern und die Dateien in `Logic/Template` ersetzen (`MetaData.plist` und `ProjectInformation.plist` mit `plutil -convert xml1` umwandeln). Eine Spur wird über ihren Namen einer Stimme zugeordnet, die Namen aus der MIDI-Datei also beibehalten. Womit die Vorlage klingt, ist gleichgültig: Gesampelte Instrumente und Hall mit Impulsantworten merken sich, wo ihre Dateien lagen, aber jedes erzeugte Projekt wird von diesen Pfaden befreit – Logic findet seine eigenen Inhalte selbst.
 
 ## Stems (optional)
 
@@ -316,5 +316,4 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 ## Nächste Schritte
 
 - **Mehrere Songs eines Laufs** zur Auswahl stellen, statt stillschweigend den ersten zu nehmen.
-- **Das Instrumental** aus der Trennung mitnehmen; die Vorlage hat dafür bisher keine Spur.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.
