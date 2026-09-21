@@ -43,6 +43,7 @@ MIDI:        /…/score.mid
 | `--drums` | Schlagzeugspur hinzufügen (siehe unten) |
 | `--drum-pattern <p>` | Groove: `four-on-the-floor` (Standard), `backbeat`, `half-time`, `disco`, `sixteenth-hats`, `shuffle`; schließt `--drums` ein |
 | `--no-crash` | Kein Crash-Becken zu Beginn eines Abschnitts |
+| `--split-drums` | Eine Spur je Trommel: `Kick`, `Snare`, `HiHat`, `Crash`; schließt `--drums` ein |
 | `--chord-pattern <p>` | Akkordbegleitung: `block` (Standard, wie notiert), `eighths`, `sixteenths`, `offbeat`, `arpeggio`, `arpeggio-up-down` |
 | `--channel <spur>=<n>` | Fester MIDI-Kanal 1–16 für eine Spur (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`); mehrfach möglich |
 | `--program <spur>=<n>` | Programmwechsel 1–128 zu Beginn einer Spur; mehrfach möglich |
@@ -65,6 +66,8 @@ MIDI:        /…/score.mid
 | `--ppq <n>` | MIDI-Auflösung in Ticks pro Viertelnote (Standard 480) |
 | `--logic <audio.flac>` | Zusätzlich ein Logic-Pro-Projekt `<ausgabe>.logicx` mit allen Spuren und diesem Audio schreiben (siehe unten) |
 | `--logic-no-audio` | Zusätzlich ein Logic-Pro-Projekt ohne Audio schreiben; die Audiospur bleibt leer |
+| `--vocals <datei>` | Getrennter Gesang (WAV) für die zweite Audiospur des Logic-Projekts |
+| `--vocals-dry <datei>` | Getrennter Gesang ohne Hall (WAV) für die dritte Audiospur |
 | `--dump-json <datei>` | Zusätzlich den geparsten Score und alle Meldungen als JSON schreiben; `.json` wird angehängt, wenn es fehlt |
 | `-f, --force` | Vorhandene Ausgabedateien überschreiben |
 | `-v, --verbose` | Auch Info-Meldungen anzeigen |
@@ -161,7 +164,7 @@ Clients, die von einem anderen Origin ausgeliefert werden (z. B. eine Electron-H
 
 ## Logic-Pro-Projekt (experimentell)
 
-Mit der `audio.flac` von YuE (CLI `--logic`, Weboberfläche: zweite Drop-Zone, dann *Logic-Projekt herunterladen*) entsteht ein komplettes Logic-Pro-Projekt: das Audio auf Spur 1 ab Takt 1, die Spuren Vocal, Ins, Chords, Bass und Drums als MIDI-Regionen, die Abschnitte des Songs als Arrangement-Marker und jeder Akkord auf Logics Akkordspur (der die Session Player folgen können), dazu Tempo, Tonart, alle Taktartwechsel und die Projektlänge aus dem Score. Ohne Audio (CLI `--logic-no-audio`, Weboberfläche: einfach keine `audio.flac` auswählen) entsteht dasselbe Projekt mit leerer Audiospur, auf die sich das FLAC später ziehen lässt; das Audiodatei-Objekt der Vorlage und seine Region werden dabei entfernt, sonst meldet Logic beim Öffnen eine fehlende Datei.
+Mit der `audio.flac` von YuE (CLI `--logic`, Weboberfläche: zweite Drop-Zone, dann *Logic-Projekt herunterladen*) entsteht ein komplettes Logic-Pro-Projekt: das Audio auf Spur 1 ab Takt 1, die Spuren Vocal, Ins, Chords, Bass und Drums als MIDI-Regionen, die Abschnitte des Songs als Arrangement-Marker und jeder Akkord auf Logics Akkordspur (der die Session Player folgen können), dazu Tempo, Tonart, alle Taktartwechsel und die Projektlänge aus dem Score. Die Stems aus der Trennung kommen auf eigene Audiospuren: Die Vorlage hat drei, für die Aufnahme, den getrennten Gesang und den Gesang ohne Hall. Jede Spur wird nach dem benannt, was sie spielt (*Mix*, *Vocals*, *Vocals dry*), und eine Spur ohne Datei verlässt das Projekt, damit Logic nichts vermisst. Ohne Audio (CLI `--logic-no-audio`, Weboberfläche: einfach keine `audio.flac` auswählen) entsteht dasselbe Projekt mit leerer Audiospur, auf die sich das FLAC später ziehen lässt; das Audiodatei-Objekt der Vorlage und seine Region werden dabei entfernt, sonst meldet Logic beim Öffnen eine fehlende Datei.
 
 Mit `--logic-split-sections` (Weboberfläche: *Eine Region pro Abschnitt statt einer pro Spur*) wird jede Spur an den Abschnittsgrenzen geteilt, statt als eine Region durchzulaufen: Die Regionen heißen nach dem Abschnitt, den sie abdecken, und werden nummeriert, wenn ein Name wiederkehrt (`Verse 1`, `Chorus 1`, `Verse 2`, …). So lässt sich ein Abschnitt einzeln kopieren, loopen, stummschalten oder verschieben. Eine Spur, für die der Score nichts hergibt, behält ihre eine leere Region, und eine Note über eine Abschnittsgrenze hinaus behält ihre Länge – die Region wächst mit, statt die Note zu beschneiden. Das Audio bleibt eine Region ab Takt 1.
 
@@ -184,6 +187,8 @@ Der API-Schlüssel bleibt dabei im Server: Der Browser spricht nur mit dieser An
 | `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` oder `failed` samt `lastError` |
 | `GET /api/stems/{id}/result` | – | das ZIP mit den WAV-Stems |
 | `DELETE /api/stems/{id}` | – | bestätigt den Import; der Dienst löscht Ergebnis und Auftrag |
+
+Die Stems müssen dafür nicht durch den Browser: Beim Logic-Export genügt das Feld `stemJob` mit der Auftrags-ID, dann holt der Server die WAVs selbst beim Stem-Dienst und legt sie auf die Audiospuren des Projekts. Danach bestätigt er den Import, womit der Dienst seine Dateien löscht. Lässt sich ein Auftrag nicht laden, entsteht das Projekt trotzdem – ohne Stems und mit einer Warnung (`YTL054`).
 
 Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `Stems__BaseUrl` und `Stems__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt den Bereich gar nicht erst an. Läuft der Gateway im selben Docker-Host, ist `http://stemmywav:8080` die Adresse; dafür muss dieses Compose-Projekt dessen Netz beitreten (in [`deploy/compose.yml`](deploy/compose.yml) auskommentiert vorbereitet).
 
@@ -235,9 +240,9 @@ Eine Standard-MIDI-Datei vom Typ 1:
 
 `--mono` bereitet die Melodiespuren – und den Bass – für monophone Synthesizer auf. Drei Dinge stehen dem sonst im Weg: zwei gleichzeitig klingende Töne, von denen der Synth einen verwirft; sich berührende Noten, bei denen die Hüllkurve nie neu ausgelöst wird und zwei Töne als ein langes Gleiten herauskommen; und Noten, die so kurz sind, dass eine langsame Hüllkurve gar nicht öffnet. Die Aufbereitung lässt immer nur einen Ton klingen, hält vor dem nächsten Anschlag eine kurze Lücke und dehnt die kürzesten Noten. `--legato` lässt zusätzlich jede Note bis zur nächsten reichen, sodass die Spur zu einer durchgehenden Folge von Gates wird. Sie läuft nach dem Groove, damit ihre Zusagen auch für das gelten, was am Ende geschrieben wird.
 
-Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
+Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Mit `--split-drums` (Weboberfläche: *Eine Spur je Trommel*) verteilt sich das Schlagzeug auf die Spuren `Kick`, `Snare`, `HiHat` und `Crash` – dieselben Noten, nur getrennt, damit jede Trommel ihr eigenes Instrument und ihren eigenen Platz in der Mischung bekommt. Alle bleiben auf dem General-MIDI-Schlagzeugkanal, und eine Trommel, die das Muster nicht spielt, bekommt keine Spur. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
 
-Welche Spuren ein Logic-Projekt hat, gibt die Vorlage vor und nicht dieses Werkzeug; die mitgelieferte hat sieben: `Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide` und `Vocal 8vb`. Eine Stimme, für die die Vorlage keine Spur hat – etwa eine Dopplung der Instrumentalstimme (`Ins 8vb`) –, landet in der MIDI-Datei, aber nicht im Logic-Projekt; eine Warnung (`YTL053`) weist darauf hin und nennt die Spuren, die die Vorlage hat. Eine eigene Vorlage mit einer passend benannten Spur – siehe *Logic-Pro-Projekt* weiter unten – füllt auch diese.
+Welche Spuren ein Logic-Projekt hat, gibt die Vorlage vor und nicht dieses Werkzeug. Die mitgelieferte hat elf MIDI-Spuren – `Vocal`, `Ins`, `Vocal 8vb`, `Chords`, `Bass`, `Guide`, `Drums` sowie `Kick`, `Snare`, `HiHat` und `Crash` für ein geteiltes Schlagzeug – und drei Audiospuren für die Aufnahme und ihre Stems. Eine Stimme, für die die Vorlage keine Spur hat – etwa eine Dopplung der Instrumentalstimme (`Ins 8vb`) –, landet in der MIDI-Datei, aber nicht im Logic-Projekt; eine Warnung (`YTL053`) weist darauf hin und nennt die Spuren, die die Vorlage hat. Eine eigene Vorlage mit einer passend benannten Spur – siehe *Logic-Pro-Projekt* weiter unten – füllt auch diese.
 
 ## Tempo anpassen
 
@@ -310,6 +315,6 @@ Die GitHub Action in `.github/workflows/ci.yml` führt dieselben Schritte bei je
 
 ## Nächste Schritte
 
-- **Stems ins Logic-Projekt**, statt sie nur herunterzuladen: Gesang und Instrumental als eigene Audiospuren neben dem Mix. Dafür braucht es eine Vorlage mit mehreren Audiospuren und das Klonen der Audio-Objekte im Projektformat.
 - **Mehrere Songs eines Laufs** zur Auswahl stellen, statt stillschweigend den ersten zu nehmen.
+- **Das Instrumental** aus der Trennung mitnehmen; die Vorlage hat dafür bisher keine Spur.
 - Weitere Begleitmuster für Schlagzeug, Akkorde und Bass, sobald sich beim Arbeiten Bedarf zeigt.

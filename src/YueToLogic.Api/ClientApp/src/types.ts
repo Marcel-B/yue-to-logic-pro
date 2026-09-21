@@ -96,7 +96,7 @@ export interface ConversionOptions {
     defaultOctaveShift: number
     octaveShifts: Record<string, number>
     bass: { pattern: BassPattern; octaveShift: number } | null
-    drums: { pattern: DrumPattern; crashOnSections: boolean } | null
+    drums: { pattern: DrumPattern; crashOnSections: boolean; separateTracks: boolean } | null
     chords: { pattern: ChordPattern; inversion: ChordInversion; octaveShift: number } | null
     guideTones: { octaveShift: number } | null
     doubling: { voiceId: string; semitones: number } | null
@@ -128,4 +128,4 @@ export interface StemJob {
 }
 
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
-export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide'] as const
+export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const

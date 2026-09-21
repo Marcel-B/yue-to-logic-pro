@@ -10,6 +10,12 @@ const props = defineProps<{
   outputName: string
 }>()
 
+/**
+ * The finished job, which the Logic export then takes its stems from. It stays until the project has been
+ * written - the stem service drops the files only once the import is confirmed.
+ */
+const job = defineModel<string | null>('job', { required: true })
+
 /** How often the job is asked about; a separation runs for minutes, so this is not a busy wait. */
 const pollMilliseconds = 5000
 
@@ -41,7 +47,12 @@ onUnmounted(() => window.clearTimeout(timer))
 
 function reset(): void {
   window.clearTimeout(timer)
+  // A job nobody is going to import any more: let the service drop its files now rather than in a day.
+  if (job.value) {
+    void confirmStems(job.value)
+  }
   jobId = null
+  job.value = null
   status.value = null
   error.value = null
   busy.value = false
@@ -87,11 +98,14 @@ function poll(): void {
   }, pollMilliseconds)
 }
 
-/** Downloads the ZIP and tells the service it may drop the files. */
+/**
+ * Downloads the ZIP for the browser and keeps the job, so that the Logic export can still fetch the stems
+ * from the service. Confirming it there removes them; an unconfirmed job the service clears after a day.
+ */
 async function save(id: string): Promise<void> {
   const stems = await downloadStems(id)
   download(stems, `${props.outputName || 'score'}-stems.zip`)
-  await confirmStems(id)
+  job.value = id
   jobId = null
   busy.value = false
 }
@@ -120,7 +134,7 @@ function fail(caught: unknown): void {
 
     <p v-if="!audio" class="hint muted">{{ t('stemsNeedsAudio') }}</p>
     <p v-else-if="busy && statusText" class="hint">{{ statusText }}</p>
-    <p v-else-if="status === 'completed'" class="hint">{{ t('stemsDone') }}</p>
+    <p v-else-if="status === 'completed'" class="hint">{{ job ? t('stemsDoneForLogic') : t('stemsDone') }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
   </div>
 </template>

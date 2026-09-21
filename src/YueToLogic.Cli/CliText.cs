@@ -91,6 +91,7 @@ internal sealed class CliText
                   --drum-pattern <p>  Drum groove: four-on-the-floor (default), backbeat (kick 1+3, snare 2+4,
                                       open hi-hat on 4+), half-time, disco, sixteenth-hats, shuffle;
                                       implies --drums
+                  --split-drums       One track per drum: Kick, Snare, HiHat, Crash; implies --drums
                   --chord-pattern <p> How the chords are played: block (default, as written), eighths,
                                       sixteenths, offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Inversion of the chords: root (default), closest (smooth voice leading),
@@ -122,6 +123,8 @@ internal sealed class CliText
                   --dump-json <file>  Also write the parsed score and diagnostics as JSON (.json is added if missing)
                   --logic <audio.flac> Also write a Logic Pro project (<output>.logicx) with the MIDI tracks and this audio
                   --logic-no-audio    Also write a Logic Pro project without audio (its audio track stays empty)
+                  --vocals <file>     Separated vocals (WAV) for the project's second audio track
+                  --vocals-dry <file> Separated vocals without reverb (WAV) for its third audio track
               -f, --force             Overwrite existing output files
               -v, --verbose           Also show informational messages
               -h, --help              Show this help
@@ -197,6 +200,7 @@ internal sealed class CliText
                   --drum-pattern <p>  Groove: four-on-the-floor (Standard), backbeat (Kick 1+3, Snare 2+4,
                                       offene Hi-Hat auf 4+), half-time, disco, sixteenth-hats, shuffle;
                                       schließt --drums ein
+                  --split-drums       Eine Spur je Trommel: Kick, Snare, HiHat, Crash; schließt --drums ein
                   --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, sixteenths,
                                       offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Akkordlage: root (Standard), closest (weiche Stimmführung), first, second
@@ -227,6 +231,8 @@ internal sealed class CliText
                   --dump-json <datei> Zusätzlich Score und Meldungen als JSON schreiben, .json wird ggf. ergänzt
                   --logic <audio.flac> Zusätzlich ein Logic-Pro-Projekt (<ausgabe>.logicx) mit den MIDI-Spuren und diesem Audio
                   --logic-no-audio    Zusätzlich ein Logic-Pro-Projekt ohne Audio (die Audiospur bleibt leer)
+                  --vocals <datei>    Getrennter Gesang (WAV) für die zweite Audiospur des Projekts
+                  --vocals-dry <datei> Getrennter Gesang ohne Hall (WAV) für die dritte Audiospur
               -f, --force             Vorhandene Ausgabedateien überschreiben
               -v, --verbose           Auch Info-Meldungen anzeigen
               -h, --help              Diese Hilfe anzeigen

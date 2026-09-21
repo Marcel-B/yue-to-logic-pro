@@ -112,7 +112,7 @@ if (!await TryWriteAsync(midiPath, () => File.WriteAllBytesAsync(midiPath, resul
     return ExitUsageOrIoError;
 }
 
-if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, logicAudioPath, logicPath))
+if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, logicAudioPath, logicPath, options.VocalsPath, options.VocalsDryPath))
 {
     return ExitConversionFailed;
 }
@@ -120,7 +120,7 @@ if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, log
 PrintSummary(result.Score!);
 return ExitSuccess;
 
-async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPath, string packagePath)
+async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPath, string packagePath, string? vocalsPath, string? vocalsDryPath)
 {
     try
     {
@@ -130,9 +130,11 @@ async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPat
         }
 
         await using var audio = audioPath is null ? null : File.OpenRead(audioPath);
+        await using var vocals = vocalsPath is null ? null : File.OpenRead(vocalsPath);
+        await using var vocalsDry = vocalsDryPath is null ? null : File.OpenRead(vocalsDryPath);
         var logic = await new LogicProjectWriter().WriteAsync(
             score,
-            audio,
+            new LogicAudio(audio, vocals, vocalsDry),
             new DirectoryLogicPackageSink(packagePath),
             new LogicProjectOptions
             {
