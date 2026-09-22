@@ -21,7 +21,7 @@ import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
 import { midiUsable } from './player'
-import { deletePreset, loadPresets, savePreset } from './presets'
+import { deletePreset, loadPresets, savePreset, type Preset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
 import type { Assignments, ConversionResult, Diagnostic, Instrument } from './types'
@@ -118,10 +118,32 @@ watch(assignments, () => {
   }
 })
 
-const presets = ref(loadPresets())
+/** The presets, kept on the server like the instruments; loaded once, and again after every change. */
+const presets = ref<Preset[]>([])
 /** The preset the form currently shows; empty once a preset is saved under a new name or none is chosen. */
 const presetName = ref('')
 const newPresetName = ref('')
+const presetsBusy = ref(false)
+const presetsError = ref<string | null>(null)
+void withPresets(() => loadPresets())
+
+/** Runs a change of the presets and shows what came back; the form itself is unaffected by a failure. */
+async function withPresets(change: () => Promise<Preset[]>): Promise<boolean> {
+  presetsBusy.value = true
+  presetsError.value = null
+  try {
+    presets.value = await change()
+    return true
+  } catch (caught) {
+    presetsError.value =
+      caught instanceof ApiError && caught.status === 0
+        ? t('networkError')
+        : t('presetsError', { message: caught instanceof Error ? caught.message : String(caught) })
+    return false
+  } finally {
+    presetsBusy.value = false
+  }
+}
 
 function applyPreset(): void {
   const preset = presets.value.find((entry) => entry.name === presetName.value)
@@ -130,15 +152,20 @@ function applyPreset(): void {
   }
 }
 
-function storePreset(): void {
-  presets.value = savePreset(newPresetName.value, form.value)
-  presetName.value = newPresetName.value
-  newPresetName.value = ''
+async function storePreset(): Promise<void> {
+  const name = newPresetName.value
+  if (await withPresets(() => savePreset(name, form.value))) {
+    // The server keeps the name as saved; pick it as it now stands so the select shows it.
+    presetName.value = presets.value.find((entry) => entry.name.toLowerCase() === name.toLowerCase())?.name ?? ''
+    newPresetName.value = ''
+  }
 }
 
-function removePreset(): void {
-  presets.value = deletePreset(presetName.value)
-  presetName.value = ''
+async function removePreset(): Promise<void> {
+  const name = presetName.value
+  if (await withPresets(() => deletePreset(name))) {
+    presetName.value = ''
+  }
 }
 const logicBusy = ref(false)
 const logicError = ref<string | null>(null)
@@ -392,14 +419,15 @@ async function convert(): Promise<void> {
             </select>
           </label>
           <input v-model.trim="newPresetName" type="text" :placeholder="t('presetName')" spellcheck="false" />
-          <button type="button" class="button secondary small" :disabled="!newPresetName" @click="storePreset">
+          <button type="button" class="button secondary small" :disabled="!newPresetName || presetsBusy" @click="storePreset">
             {{ t('presetSave') }}
           </button>
-          <button type="button" class="button secondary small" :disabled="!presetName" @click="removePreset">
+          <button type="button" class="button secondary small" :disabled="!presetName || presetsBusy" @click="removePreset">
             {{ t('presetDelete') }}
           </button>
         </div>
       </div>
+      <p v-if="presetsError" class="hint danger presets-error" role="alert">{{ presetsError }}</p>
       <OptionsForm v-model="form" :has-audio="audioLength !== null" />
 
       <form class="submit" @submit.prevent="convert">
@@ -563,6 +591,10 @@ main {
 
 .presets input {
   width: 7rem;
+}
+
+.presets-error {
+  margin: 0 0 0.75rem;
 }
 
 /* Score and audio side by side; below a certain width each one takes the whole row. */

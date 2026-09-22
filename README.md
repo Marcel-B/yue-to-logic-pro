@@ -85,7 +85,7 @@ A Vue frontend lets you drop a `score.abc` (or pick it with a file dialog), set 
 
 Instead of two single files you can drop a **whole YuE output folder**, or open it with *Choose folder*: `score.abc` and `audio.flac` are looked for inside, one level down in `song1`, `song2` and so on as well. With several songs in the folder the first one is taken and the number of the others is reported.
 
-**Presets** above the parameter list save the whole set under a name and bring it back — for the combination of patterns, registers, groove and MIDI channels you usually work with. They live in the browser and survive *Reset*, which only clears the form.
+**Presets** above the parameter list save the whole set under a name and bring it back — for the combination of patterns, registers, groove and MIDI channels you usually work with. They are kept on the server, like the [instruments](#instruments), so every browser you open the interface from offers the same ones, and they survive *Reset*, which only clears the form. Presets a browser saved before they moved to the server are handed over the first time it sees an empty server.
 
 ### Preview
 
@@ -200,7 +200,7 @@ It is configured with `Stems:BaseUrl` and `Stems:ApiKey` (`Stems__BaseUrl` and `
 
 ## Instruments
 
-An instrument is a name for a MIDI output and channel: what the [preview](#preview) routes tracks to and what the exports put them on. Its `kind` is `Synth` (the default) or `DrumMachine`; a drum machine also carries `drums`, the note of each of its drums (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, each 0-127, General MIDI when left out), which the drum tracks that play it are generated on. The library and the assignment of tracks to instruments are the only state the application keeps, in one SQLite file:
+An instrument is a name for a MIDI output and channel: what the [preview](#preview) routes tracks to and what the exports put them on. Its `kind` is `Synth` (the default) or `DrumMachine`; a drum machine also carries `drums`, the note of each of its drums (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, each 0-127, General MIDI when left out), which the drum tracks that play it are generated on. The library, the assignment of tracks to instruments and the [presets](#presets) are the only state the application keeps, in one SQLite file:
 
 | Endpoint | Request | Response |
 |---|---|---|
@@ -212,6 +212,16 @@ An instrument is a name for a MIDI output and channel: what the [preview](#previ
 | `PUT /api/instruments/assignments/{track}` | `{ "instrumentId": 1 }`, or `null` to take it away | `204`; `404` for an unknown instrument |
 
 The port is the name Web MIDI reports in the browser - on a Mac the CoreMIDI display name, device and port together ("MIDI4x4 Midi Out 1") or just the one name when they are the same ("Scarlett 8i6 USB").
+
+## Presets
+
+A preset is the web form under a name: the server keeps the form as the JSON the interface sent and hands it back unread, so an option added to the form needs nothing on the server. A preset belongs to a user, and its name is unique per user, case-insensitively; there is no login yet, so everything belongs to the one user `local`, which the database creates. A host that adds authentication replaces the `ICurrentUser` service, and the store needs no change.
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /api/presets` | – | `[{ "id": 1, "name": "Live", "form": { … }, "updatedAt": "2026-09-22T14:05:00.000Z" }]`, ordered by name |
+| `PUT /api/presets/{name}` | `{ "form": { … } }` (a JSON object, at most 64 KiB; the name at most 64 characters) | `201` with the preset when it is new, `200` when it replaced one of that name; `400` naming what is wrong |
+| `DELETE /api/presets/{name}` | – | `204`; `404` for an unknown name |
 
 Where the file lives is set with `Data:Path` (`Data__Path` in the container); empty means `App_Data/yue-to-logic.db` next to the application, which is what a development run uses. The file and its tables are created on first use, so a server whose data directory is not writable still converts - only the instrument endpoints fail, and the interface says so and carries on without instruments. The schema carries a version, and a file written by an earlier release is upgraded in place the first time it is opened.
 

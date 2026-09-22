@@ -1,5 +1,7 @@
 using YueToLogic.Api;
+using YueToLogic.Api.Data;
 using YueToLogic.Api.Instruments;
+using YueToLogic.Api.Presets;
 using YueToLogic.Core.Stems;
 
 const string CorsPolicy = "ConfiguredOrigins";
@@ -12,15 +14,19 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 builder.Services.AddYueToLogic();
 
-// The instruments (a name for a MIDI port and channel) and their tracks are the only state the app keeps: one
-// SQLite file, created when it is first needed. Data:Path (Data__Path in a container) says where; the default
-// suits development, the container image points it at its /data volume.
+// The instruments (a name for a MIDI port and channel), their tracks and the presets of the web form are the
+// only state the app keeps: one SQLite file, created when it is first needed. Data:Path (Data__Path in a
+// container) says where; the default suits development, the container image points it at its /data volume.
 var dataPath = builder.Configuration["Data:Path"];
 if (string.IsNullOrWhiteSpace(dataPath))
 {
     dataPath = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "yue-to-logic.db");
 }
-builder.Services.AddSingleton<IInstrumentStore>(new SqliteInstrumentStore(dataPath));
+var database = new SqliteDatabase(dataPath);
+builder.Services.AddSingleton<IInstrumentStore>(new SqliteInstrumentStore(database));
+builder.Services.AddSingleton<IPresetStore>(new SqlitePresetStore(database));
+// No login yet: everything that has an owner belongs to the one local user. See ICurrentUser.
+builder.Services.AddSingleton<ICurrentUser, LocalUser>();
 
 // Stem separation is optional: without an address and a key the endpoints answer that this server has none.
 var stems = builder.Configuration.GetSection("Stems");
@@ -62,6 +68,7 @@ api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"
 api.MapConvertEndpoints();
 api.MapStemEndpoints();
 api.MapInstrumentEndpoints();
+api.MapPresetEndpoints();
 
 app.MapClientApp();
 

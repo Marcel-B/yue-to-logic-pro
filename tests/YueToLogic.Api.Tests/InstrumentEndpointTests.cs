@@ -107,7 +107,7 @@ public class InstrumentEndpointTests : IDisposable
     [Fact]
     public async Task A_library_from_the_first_release_is_upgraded_in_place()
     {
-        // The schema of version 1, as SqliteInstrumentStore created it before instruments had a kind.
+        // The schema of version 1, as the instrument store created it before instruments had a kind.
         var path = Path.Combine(Path.GetTempPath(), $"yue-to-logic-tests-{Guid.NewGuid():N}", "instruments.db");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path }.ToString()))

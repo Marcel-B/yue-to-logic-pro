@@ -167,6 +167,29 @@ export async function deleteStemJob(id: string): Promise<void> {
   await request(`/api/stems/${id}`, { method: 'DELETE' })
 }
 
+// ---- Presets -----------------------------------------------------------------------------------
+
+/** A preset as the server keeps it; the form is whatever the interface saved, checked on the way in. */
+export interface StoredPreset {
+  id: number
+  name: string
+  form: unknown
+  updatedAt: string
+}
+
+export async function listPresets(): Promise<StoredPreset[]> {
+  return (await request('/api/presets')).json() as Promise<StoredPreset[]>
+}
+
+/** Saves the form under the name, replacing a preset of that name. */
+export async function putPreset(name: string, form: unknown): Promise<StoredPreset> {
+  return (await request(`/api/presets/${encodeURIComponent(name)}`, json('PUT', { form }))).json() as Promise<StoredPreset>
+}
+
+export async function removePreset(name: string): Promise<void> {
+  await request(`/api/presets/${encodeURIComponent(name)}`, { method: 'DELETE' })
+}
+
 // ---- Instruments -------------------------------------------------------------------------------
 
 export async function listInstruments(): Promise<Instrument[]> {
