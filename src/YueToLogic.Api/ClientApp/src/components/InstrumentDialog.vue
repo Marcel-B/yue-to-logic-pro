@@ -2,7 +2,7 @@
 import { computed, ref, useTemplateRef } from 'vue'
 import { ApiError, createInstrument, deleteInstrument, listInstruments, updateInstrument } from '../api'
 import { t } from '../i18n'
-import { listMidiPorts, midiAlreadyAllowed, midiSupported, type MidiPort } from '../player'
+import { listMidiPorts, midiAlreadyAllowed, midiSupported, midiUsable, type MidiPort } from '../player'
 import type { Instrument } from '../types'
 
 /**
@@ -16,6 +16,9 @@ const emit = defineEmits<{ changed: [instruments: Instrument[]] }>()
 
 /** The port select's value for a port typed by hand, e.g. for an interface that is not plugged in right now. */
 const OTHER_PORT = '\u0000other'
+
+/** Outside Chromium the library is only shown: ports cannot be picked there, so nothing is added or changed. */
+const readOnly = !midiUsable()
 
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 const ports = ref<MidiPort[]>([])
@@ -40,6 +43,9 @@ async function open(): Promise<void> {
   startAdding()
   error.value = null
   dialog.value?.showModal()
+  if (readOnly) {
+    return
+  }
   if (midiSupported() && (await midiAlreadyAllowed())) {
     await loadPorts()
   } else {
@@ -157,7 +163,7 @@ defineExpose({ open })
           <th>{{ t('instrumentName') }}</th>
           <th>{{ t('instrumentPort') }}</th>
           <th>{{ t('instrumentChannel') }}</th>
-          <th><span class="sr-only">{{ t('instrumentEdit') }}</span></th>
+          <th v-if="!readOnly"><span class="sr-only">{{ t('instrumentEdit') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -165,7 +171,7 @@ defineExpose({ open })
           <td>{{ instrument.name }}</td>
           <td>{{ instrument.port }}</td>
           <td>{{ instrument.channel }}</td>
-          <td class="actions">
+          <td v-if="!readOnly" class="actions">
             <button type="button" class="link" :disabled="busy" @click="edit(instrument)">{{ t('instrumentEdit') }}</button>
             <button type="button" class="link" :disabled="busy" @click="remove(instrument)">{{ t('instrumentDelete') }}</button>
           </td>
@@ -174,7 +180,14 @@ defineExpose({ open })
     </table>
     <p v-else class="muted empty">{{ t('instrumentsEmpty') }}</p>
 
-    <form class="editor" @submit.prevent="submit">
+    <div v-if="readOnly" class="editor">
+      <p class="hint muted">{{ t('instrumentsChromiumOnly') }}</p>
+      <div class="choices">
+        <button type="button" class="button secondary" @click="close">{{ t('instrumentClose') }}</button>
+      </div>
+    </div>
+
+    <form v-else class="editor" @submit.prevent="submit">
       <h4>{{ editing === null ? t('instrumentAdd') : t('instrumentEditing', { name }) }}</h4>
       <label>
         {{ t('instrumentName') }}

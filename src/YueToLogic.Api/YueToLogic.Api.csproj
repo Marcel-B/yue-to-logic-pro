@@ -12,6 +12,7 @@
     <SkipClientAppBuild Condition="'$(SkipClientAppBuild)' == ''">false</SkipClientAppBuild>
     <SpaProxyServerUrl>http://127.0.0.1:5173/ui/</SpaProxyServerUrl>
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
+    <UserSecretsId>ce33ea4f-4a3c-4efc-a2dc-7181b0bc8f3e</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

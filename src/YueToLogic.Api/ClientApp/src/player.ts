@@ -249,6 +249,17 @@ export function midiSupported(): boolean {
 }
 
 /**
+ * Whether MIDI hardware can actually be driven from this browser, which is the case under the Chromium engine
+ * (Chrome, Edge). Safari has no Web MIDI; Firefox declares the API but routes every request through a
+ * site-permission add-on, so a port never simply appears. Instruments are therefore only edited where a port
+ * can be picked: elsewhere the library is shown read-only and the routing table keeps to the manual choices.
+ * `userAgentData` exists in Chromium only, which makes it a plain test for the engine.
+ */
+export function midiUsable(): boolean {
+  return midiSupported() && 'userAgentData' in navigator
+}
+
+/**
  * Whether MIDI may be used without asking. Chrome prompts on the first requestMIDIAccess, and a prompt that
  * appears unasked right after a conversion is startling; the preview therefore only requests on demand,
  * unless permission was granted earlier.

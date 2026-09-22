@@ -20,6 +20,7 @@ import {
   listMidiPorts,
   midiAlreadyAllowed,
   midiSupported,
+  midiUsable,
   OutputPool,
   scheduleOf,
   testTone,
@@ -64,7 +65,9 @@ const lanes = shallowRef(lanesOf(voices.value))
 const trackIds = computed(() => voices.value.map((voice) => voice.id))
 /** The routing chosen by hand per track; an instrument, where one is assigned, overrides it without touching it. */
 const routings = ref<Routing[]>(loadRoutings(trackIds.value, defaultRoutings(voices.value)))
-const hasInstruments = computed(() => props.instruments.length > 0)
+/** Instruments are offered where MIDI hardware can be driven; elsewhere the table keeps to the manual choices. */
+const instrumentsUsable = midiUsable()
+const hasInstruments = computed(() => instrumentsUsable && props.instruments.length > 0)
 /** What the player uses: the instrument's port and channel where a track has one, the manual routing elsewhere. */
 const effective = computed(() =>
   routings.value.map((routing, index) =>
@@ -361,7 +364,7 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
         <button v-if="canAskForMidi" type="button" class="button secondary small" @click="loadPorts">
           {{ t('previewFindMidi') }}
         </button>
-        <button type="button" class="button secondary small" @click="emit('manageInstruments')">
+        <button v-if="instrumentsUsable" type="button" class="button secondary small" @click="emit('manageInstruments')">
           {{ t('instrumentsManage') }}
         </button>
         <label class="field">

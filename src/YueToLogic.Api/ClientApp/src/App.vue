@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, useTemplateRef, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import {
   ApiError,
   assignInstrument,
@@ -19,6 +19,7 @@ import StemPanel from './components/StemPanel.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withInstrumentChannels } from './instruments'
+import { midiUsable } from './player'
 import { deletePreset, loadPresets, savePreset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
@@ -42,6 +43,11 @@ void stemsAvailable().then((available) => (stems.value = available))
 /** The instrument library and which track plays which, both kept on the server. */
 const instruments = ref<Instrument[]>([])
 const assignments = ref<Assignments>({})
+/**
+ * Outside Chromium no port can be picked, so the instruments are only shown and not applied: the preview, the
+ * MIDI file and the Logic project then follow what the routing table offers there, the manual choices.
+ */
+const appliedAssignments = computed(() => (midiUsable() ? assignments.value : {}))
 const instrumentsError = ref<string | null>(null)
 const instrumentDialog = useTemplateRef<InstanceType<typeof InstrumentDialog>>('instrumentDialog')
 void loadInstruments()
@@ -192,7 +198,7 @@ async function exportLogic(): Promise<void> {
       outputName.value,
       form.value.splitSections,
       stemJob.value,
-      instrumentsForExport(assignments.value, instruments.value),
+      instrumentsForExport(appliedAssignments.value, instruments.value),
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
@@ -235,7 +241,7 @@ function reset(): void {
 
 /** The form's options with every assigned track on its instrument's channel. */
 function conversionOptions() {
-  return withInstrumentChannels(toConversionOptions(form.value, audioLength.value), assignments.value, instruments.value)
+  return withInstrumentChannels(toConversionOptions(form.value, audioLength.value), appliedAssignments.value, instruments.value)
 }
 
 async function convert(): Promise<void> {
@@ -375,7 +381,7 @@ async function convert(): Promise<void> {
       :include-chords="form.includeChords"
       :stale="stale"
       :instruments="instruments"
-      :assignments="assignments"
+      :assignments="appliedAssignments"
       @assign="assign"
       @manage-instruments="openInstruments"
     />
