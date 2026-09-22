@@ -181,13 +181,16 @@ Jede Spur wird nach dem Part benannt, den sie trägt – `Vocal`, `Ins`, `Chords
 
 Auf Wunsch schickt die Weboberfläche die `audio.flac` an [StemMyWav](https://github.com/Marcel-B/StemMyWav) und bekommt sie in Gesang und Instrumental getrennt zurück. Getrennt wird auf einem Mac mit Metal-GPU; das dauert je nach Länge einige Minuten. Der Ablauf ist deshalb asynchron: Der Auftrag wird angelegt, die Oberfläche fragt alle fünf Sekunden nach dem Stand und meldet sich mit einem Fenster, sobald er fertig ist. Dort wählst du, ob das Logic-Projekt gleich mit den Stems geladen werden soll, ob die Stems verworfen werden oder ob du später über den gewohnten Knopf lädst. Heruntergeladen wird von selbst nichts; die Stems bleiben beim Dienst, bis sie ins Projekt gewandert sind oder du sie löschst. Wer sie einzeln haben will, lädt sie als ZIP. Mit dem Schalter *Hall vom Gesang trennen* kommen `vocals_dry.wav` und `vocals_reverb.wav` dazu.
 
+**Womit getrennt wird.** Der Dienst kennt mehrere Trennmodelle; die Auswahl *Modell* über dem Knopf zeigt, was er anbietet. Die Oberfläche holt die Liste beim Dienst, ein Gateway mit neuen Modellen braucht hier also keine Änderung. Unter der Auswahl steht, was das gewählte Modell tut: welche Stems zurückkommen und wie lange es rechnet, gemessen an der Spieldauer – ein Modell mit `realtimeFactor` 0,3 braucht für vier Minuten Musik rund dreizehn Minuten, eines mit 2,5 etwa anderthalb. Die Voreinstellung des Dienstes ist markiert und vorausgewählt, die zuletzt getroffene Wahl merkt sich der Browser. Ein Modell ohne Gesangs-Stem – ein Instrumental- oder Schlagzeugmodell – sagt das: Seine Stems lassen sich als ZIP laden, die Stem-Spuren des Projekts bleiben aber leer, und der Hall-Schalter, der einen Gesangs-Stem braucht, steht damit nicht zur Verfügung.
+
 Der API-Schlüssel bleibt dabei im Server: Der Browser spricht nur mit dieser Anwendung, die die Anfragen weiterreicht.
 
 | Endpunkt | Anfrage | Antwort |
 |---|---|---|
 | `GET /api/stems` | – | `{"available":true}`, wenn ein Stem-Dienst eingerichtet ist |
-| `POST /api/stems?dereverb=false` | die rohe FLAC als Body (`Content-Type: audio/flac`) | Auftrag mit `id` und `status` |
-| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` oder `failed` samt `lastError` |
+| `GET /api/stems/models` | – | die Trennmodelle des Dienstes, je mit `id`, `name`, `stems`, `speed`, `realtimeFactor` und `isDefault` |
+| `POST /api/stems?dereverb=false&model=` | die rohe FLAC als Body (`Content-Type: audio/flac`) | Auftrag mit `id`, `status` und dem `model`, mit dem er läuft |
+| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` oder `failed` samt `lastError` und `model` |
 | `GET /api/stems/{id}/result` | – | das ZIP mit den WAV-Stems |
 | `DELETE /api/stems/{id}` | – | bestätigt den Import; der Dienst löscht Ergebnis und Auftrag. Bricht einen noch wartenden Auftrag (`queued`) ab; `409`, solange er gerade zum Mac übertragen wird |
 | `GET /api/stems/jobs` | – | alle Aufträge, die der Dienst kennt, jüngste zuerst, mit `createdUtc` und `updatedUtc` |

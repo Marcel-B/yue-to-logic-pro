@@ -181,13 +181,16 @@ Each track is named after the part it carries — `Vocal`, `Ins`, `Chords`, `Bas
 
 On request the web interface sends the `audio.flac` to [StemMyWav](https://github.com/Marcel-B/StemMyWav) and gets it back split into vocals and instrumental. The separation runs on a Mac with a Metal GPU and takes minutes, depending on the length. The flow is therefore asynchronous: the job is created, the interface asks for its state every five seconds and says so in a window once it is done. There you choose whether the Logic project is downloaded with the stems right away, whether the stems are discarded, or whether you take them later with the usual button. Nothing is downloaded on its own; the stems stay at the service until they have gone into a project or you delete them. Whoever wants them separately downloads the ZIP. The switch *Separate the reverb from the vocals* adds `vocals_dry.wav` and `vocals_reverb.wav`.
 
+**Which model separates.** The service offers several separation models, and the list *Model* above the button holds what it knows; the interface fetches it rather than knowing it, so a gateway with new models needs no change here. Under the list stands what the chosen one does: which stems come back, and how long it computes measured against the playing time — a model at `realtimeFactor` 0.3 takes about thirteen minutes for a four-minute song, one at 2.5 about a minute and a half. The service's own default is marked and preselected, and the last choice is remembered in the browser. A model that separates no vocals — an instrumental or a drum model — says so: its stems can be downloaded as a ZIP, but the project's stem tracks stay empty, and the reverb switch, which needs a vocal stem, is not available with it.
+
 The API key stays on the server: the browser only ever talks to this application, which passes the requests on.
 
 | Endpoint | Request | Response |
 |---|---|---|
 | `GET /api/stems` | – | `{"available":true}` when a stem service is configured |
-| `POST /api/stems?dereverb=false` | the raw FLAC as the body (`Content-Type: audio/flac`) | job with `id` and `status` |
-| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` or `failed`, with `lastError` |
+| `GET /api/stems/models` | – | the separation models of the service, each with `id`, `name`, `stems`, `speed`, `realtimeFactor` and `isDefault` |
+| `POST /api/stems?dereverb=false&model=` | the raw FLAC as the body (`Content-Type: audio/flac`) | job with `id`, `status` and the `model` it runs with |
+| `GET /api/stems/{id}` | – | `queued`, `processing`, `completed` or `failed`, with `lastError` and `model` |
 | `GET /api/stems/{id}/result` | – | the ZIP with the WAV stems |
 | `DELETE /api/stems/{id}` | – | confirms the import; the service removes result and job. Cancels a job that is still `queued`; `409` while it is being transferred to the Mac |
 | `GET /api/stems/jobs` | – | every job the service knows, newest first, with `createdUtc` and `updatedUtc` |

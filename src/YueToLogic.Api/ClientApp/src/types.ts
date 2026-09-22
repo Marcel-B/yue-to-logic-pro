@@ -129,9 +129,35 @@ export interface StemJob {
   createdUtc: string | null
   /** ISO 8601; when the service last changed the job. */
   updatedUtc: string | null
+  /** The separation model the job runs with, as the service names it back. */
+  model: string | null
 }
 
 export type StemJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
+
+/**
+ * A separation model the stem service offers. Which one is chosen decides how long the job runs and which
+ * stems come back, so the choice shows more than the name.
+ */
+export interface SeparationModel {
+  /** What a job is started with. */
+  id: string
+  name: string
+  family: string | null
+  /** vocals, instrumental, karaoke, 4stem, 6stem or drums. */
+  task: string | null
+  /** The files of the result ZIP, each without its .wav ending. */
+  stems: string[]
+  /** fast, moderate, slow or verySlow. */
+  speed: string | null
+  /** Audio length divided by computing time: 0.3 means a four-minute song takes about thirteen minutes. */
+  realtimeFactor: number | null
+  /** False when the estimate comes from a comparable model rather than a measurement. */
+  measured: boolean
+  notes: string | null
+  /** The model a job without a choice runs with. */
+  isDefault: boolean
+}
 
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const

@@ -202,8 +202,11 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
 
         public Guid? Deleted { get; private set; }
 
-        public Task<StemJob> StartAsync(Stream flacAudio, bool dereverb = false, CancellationToken cancellationToken = default) =>
+        public Task<StemJob> StartAsync(Stream flacAudio, bool dereverb = false, string? model = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(new StemJob(Job, StemJobStatus.Queued));
+
+        public Task<IReadOnlyList<SeparationModel>> ListModelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SeparationModel>>([new SeparationModel("htdemucs", "HTDemucs", IsDefault: true)]);
 
         public Task<StemJob> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(new StemJob(id, StemJobStatus.Completed));

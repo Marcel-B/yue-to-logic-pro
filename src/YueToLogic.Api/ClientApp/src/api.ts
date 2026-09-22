@@ -6,6 +6,7 @@ import type {
   Instrument,
   InstrumentInput,
   LogicInstrument,
+  SeparationModel,
   StemJob,
 } from './types'
 
@@ -130,9 +131,21 @@ export async function stemsAvailable(): Promise<boolean> {
   }
 }
 
-/** Hands the recording over; the separation then runs for minutes on the stem service. */
-export async function startStemJob(audio: File, dereverb: boolean, signal?: AbortSignal): Promise<StemJob> {
-  return (await request(`/api/stems?dereverb=${dereverb}`, {
+/**
+ * The separation models the service offers. Which ones there are is the gateway's business, so the list is
+ * fetched rather than known here; it answers even while the separating Mac is away.
+ */
+export async function listStemModels(signal?: AbortSignal): Promise<SeparationModel[]> {
+  return (await request('/api/stems/models', { signal })).json() as Promise<SeparationModel[]>
+}
+
+/**
+ * Hands the recording over; the separation then runs for minutes on the stem service.
+ *
+ * @param model The id of a separation model, or an empty string for the service's default.
+ */
+export async function startStemJob(audio: File, dereverb: boolean, model: string, signal?: AbortSignal): Promise<StemJob> {
+  return (await request(`/api/stems?dereverb=${dereverb}${model ? `&model=${encodeURIComponent(model)}` : ''}`, {
     method: 'POST',
     body: audio,
     headers: { 'Content-Type': 'audio/flac' },
