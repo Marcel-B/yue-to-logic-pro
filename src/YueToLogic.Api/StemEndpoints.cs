@@ -30,11 +30,15 @@ public static class StemEndpoints
             .WithName("StemsAvailable")
             .WithSummary("Says whether this server can have stems separated at all.");
 
+        stems.MapGet("/models", ModelsAsync)
+            .WithName("StemModels")
+            .WithSummary("The separation models the stem service offers; one of their ids starts a job.");
+
         stems.MapPost("/", StartAsync)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes))
             .WithName("StartStemJob")
-            .WithSummary("Hands the audio.flac to the stem service; the body is the raw file.");
+            .WithSummary("Hands the audio.flac to the stem service; the body is the raw file, the model is chosen in the query.");
 
         stems.MapGet("/jobs", ListAsync)
             .WithName("StemJobs")
@@ -65,6 +69,7 @@ public static class StemEndpoints
     private static async Task<IResult> StartAsync(
         HttpRequest request,
         [FromQuery] bool? dereverb,
+        [FromQuery] string? model,
         IServiceProvider services,
         CancellationToken cancellationToken)
     {
@@ -78,7 +83,29 @@ public static class StemEndpoints
             return Results.Problem(title: "Missing audio", detail: "Send the audio.flac as the request body.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        return await CallAsync(() => service.StartAsync(request.Body, dereverb ?? false, cancellationToken)).ConfigureAwait(false);
+        return await CallAsync(() => service.StartAsync(request.Body, dereverb ?? false, model, cancellationToken)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The models the service offers, passed on as it names them: the interface fills its choice from this
+    /// and knows nothing about which models a gateway has.
+    /// </summary>
+    private static async Task<IResult> ModelsAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        if (Service(services) is not { } service)
+        {
+            return Unavailable();
+        }
+
+        try
+        {
+            var models = await service.ListModelsAsync(cancellationToken).ConfigureAwait(false);
+            return Results.Json(models.ToArray(), YueToLogicJsonContext.Default.SeparationModelArray);
+        }
+        catch (StemSeparationException exception)
+        {
+            return Failed(exception);
+        }
     }
 
     private static async Task<IResult> GetAsync(Guid id, IServiceProvider services, CancellationToken cancellationToken) =>

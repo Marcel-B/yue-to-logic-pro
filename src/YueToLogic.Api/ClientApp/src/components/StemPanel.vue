@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, useTemplateRef, watch } from 'vue'
-import { ApiError, confirmStems, downloadStems, startStemJob, stemJobStatus } from '../api'
-import { t } from '../i18n'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { ApiError, confirmStems, downloadStems, listStemModels, startStemJob, stemJobStatus } from '../api'
+import { locale, t } from '../i18n'
 import { download } from '../score'
+import type { SeparationModel } from '../types'
 
 const props = defineProps<{
   audio: File | null
@@ -28,7 +29,22 @@ const emit = defineEmits<{ exportLogic: [] }>()
 /** How often the job is asked about; a separation runs for minutes, so this is not a busy wait. */
 const pollMilliseconds = 5000
 
+const modelStorageKey = 'yue-to-logic.stemModel'
+
+/** The model of the last separation, so that a setup that works is not chosen again every time. */
+function storedModel(): string {
+  try {
+    return localStorage.getItem(modelStorageKey) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 const dereverb = ref(false)
+/** What the service can separate with; empty when its list could not be fetched. */
+const models = ref<SeparationModel[]>([])
+/** The chosen model's id; empty means the service takes its own default. */
+const model = ref(storedModel())
 const status = ref<string | null>(null)
 const error = ref<string | null>(null)
 /** What happened to the job outside this panel, e.g. that it was removed in the stem service dialog. */
@@ -39,6 +55,48 @@ const downloading = ref(false)
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 let jobId: string | null = null
 let timer: number | undefined
+
+const chosen = computed(() => models.value.find((m) => m.id === model.value) ?? null)
+
+/**
+ * Only a model that separates a vocal stem can have its reverb taken off, and only such a model fills the
+ * project's stem tracks; with any other the switch is pointless and the hint below the choice says so.
+ */
+const hasVocals = computed(() => chosen.value === null || chosen.value.stems.some((stem) => stem.startsWith('vocals')))
+
+/**
+ * The models by what they separate, in the order the service lists them. It offers a couple of dozen, so
+ * without the grouping the list would be a wall of names that all begin alike.
+ */
+const grouped = computed(() => {
+  const groups: { task: string; label: string; models: SeparationModel[] }[] = []
+  for (const value of models.value) {
+    const task = value.task ?? ''
+    const group = groups.find((g) => g.task === task)
+    if (group) {
+      group.models.push(value)
+    } else {
+      groups.push({ task, label: taskText(task), models: [value] })
+    }
+  }
+  return groups
+})
+
+/** What the chosen model does, in one line: which stems it returns, how long it computes, what it is known for. */
+const modelText = computed(() => {
+  const value = chosen.value
+  if (!value) {
+    return null
+  }
+
+  const parts = [
+    value.stems.length > 0 ? t('stemsModelStems', { stems: value.stems.join(', ') }) : null,
+    speedText(value.speed),
+    factorText(value),
+    value.notes,
+  ]
+  return parts.filter((part) => part).join(' · ')
+})
 
 const statusText = computed(() => {
   switch (status.value) {
@@ -58,6 +116,35 @@ watch(
 )
 
 onUnmounted(() => window.clearTimeout(timer))
+
+// The list comes from the gateway itself, so it is there even while the separating Mac is not.
+onMounted(async () => {
+  try {
+    models.value = await listStemModels()
+    if (!models.value.some((m) => m.id === model.value)) {
+      model.value = models.value.find((m) => m.isDefault)?.id ?? models.value[0]?.id ?? ''
+    }
+  } catch {
+    // Without the list there is no choice to make; the service then separates with its own default.
+    models.value = []
+    model.value = ''
+  }
+})
+
+// A model without a vocal stem leaves nothing for the dereverb to work on.
+watch(hasVocals, (possible) => {
+  if (!possible) {
+    dereverb.value = false
+  }
+})
+
+watch(model, (id) => {
+  try {
+    localStorage.setItem(modelStorageKey, id)
+  } catch {
+    // Remembering the last model is a convenience only.
+  }
+})
 
 function reset(): void {
   window.clearTimeout(timer)
@@ -102,7 +189,7 @@ async function start(): Promise<void> {
   reset()
   busy.value = true
   try {
-    const started = await startStemJob(props.audio, dereverb.value)
+    const started = await startStemJob(props.audio, dereverb.value, model.value)
     jobId = started.id
     tracked.value = started.id
     status.value = started.status
@@ -176,6 +263,53 @@ function close(): void {
   dialog.value?.close()
 }
 
+function taskText(task: string): string {
+  switch (task) {
+    case 'vocals':
+      return t('stemsModelTaskVocals')
+    case 'instrumental':
+      return t('stemsModelTaskInstrumental')
+    case 'karaoke':
+      return t('stemsModelTaskKaraoke')
+    case '4stem':
+      return t('stemsModelTask4Stem')
+    case '6stem':
+      return t('stemsModelTask6Stem')
+    case 'drums':
+      return t('stemsModelTaskDrums')
+    default:
+      return task || t('stemsModelTaskOther')
+  }
+}
+
+function speedText(speed: string | null): string | null {
+  switch (speed) {
+    case 'fast':
+      return t('stemsModelSpeedFast')
+    case 'moderate':
+      return t('stemsModelSpeedModerate')
+    case 'slow':
+      return t('stemsModelSpeedSlow')
+    case 'verySlow':
+      return t('stemsModelSpeedVerySlow')
+    default:
+      return null
+  }
+}
+
+/**
+ * The service reports audio length divided by computing time; turned around it says how many times the song's
+ * own length the separation takes, which is what one waits for.
+ */
+function factorText(value: SeparationModel): string | null {
+  if (!value.realtimeFactor || value.realtimeFactor <= 0) {
+    return null
+  }
+
+  const times = (Math.round((1 / value.realtimeFactor) * 10) / 10).toLocaleString(locale.value)
+  return t(value.measured ? 'stemsModelFactor' : 'stemsModelFactorEstimated', { times })
+}
+
 function fail(caught: unknown): void {
   error.value = caught instanceof ApiError && caught.status === 0 ? t('networkError') : `${caught}`
   busy.value = false
@@ -190,12 +324,25 @@ defineExpose({ forget })
     <h3>{{ t('stemsTitle') }}</h3>
     <p class="muted intro">{{ t('stemsInfo') }}</p>
 
+    <label v-if="models.length > 0" class="field">
+      <span>{{ t('stemsModel') }}</span>
+      <select v-model="model" :disabled="busy">
+        <optgroup v-for="group in grouped" :key="group.task" :label="group.label">
+          <option v-for="option in group.models" :key="option.id" :value="option.id">
+            {{ option.isDefault ? t('stemsModelDefault', { name: option.name }) : option.name }}
+          </option>
+        </optgroup>
+      </select>
+    </label>
+    <p v-if="modelText" class="hint muted model-info">{{ modelText }}</p>
+    <p v-if="!hasVocals" class="hint muted">{{ t('stemsModelNoVocals') }}</p>
+
     <div class="row">
       <button type="button" class="button secondary small" :disabled="!audio || busy" @click="start">
         {{ busy ? t('stemsRunning') : t('stemsStart') }}
       </button>
-      <label class="check" :class="{ disabled: busy }">
-        <input v-model="dereverb" type="checkbox" :disabled="busy" />
+      <label class="check" :class="{ disabled: busy || !hasVocals }">
+        <input v-model="dereverb" type="checkbox" :disabled="busy || !hasVocals" />
         {{ t('stemsDereverb') }}
       </label>
     </div>
@@ -246,6 +393,24 @@ h3 {
 
 .row.ready {
   margin-top: 0.5rem;
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.field select {
+  min-width: 14rem;
+  max-width: 100%;
+}
+
+.model-info {
+  margin-bottom: 0.75rem;
 }
 
 .check {

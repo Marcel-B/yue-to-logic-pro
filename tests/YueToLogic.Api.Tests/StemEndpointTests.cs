@@ -35,7 +35,7 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
         var stems = new FakeStems();
         var client = Client(stems);
 
-        var started = await client.PostAsync("/api/stems?dereverb=true", Flac());
+        var started = await client.PostAsync("/api/stems?dereverb=true&model=htdemucs_ft", Flac());
         var job = await started.Content.ReadFromJsonAsync<StemJob>();
         var status = await client.GetFromJsonAsync<StemJob>($"/api/stems/{JobId}");
         var result = await client.GetAsync($"/api/stems/{JobId}/result");
@@ -43,12 +43,46 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
 
         Assert.Equal(JobId, job!.Id);
         Assert.True(stems.Dereverb); // the switch reaches the service
+        Assert.Equal("htdemucs_ft", stems.Model); // and so does the chosen model
+        Assert.Equal("htdemucs_ft", job.Model); // which the answer names back
         Assert.Equal("fLaC", stems.Audio); // the body is handed on unchanged
         Assert.Equal(StemJobStatus.Completed, status!.Status);
         Assert.Equal("application/zip", result.Content.Headers.ContentType!.MediaType);
         Assert.Equal("PK-stems", await result.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.NoContent, confirmed.StatusCode);
         Assert.Equal(JobId, stems.Deleted);
+    }
+
+    [Fact]
+    public async Task The_models_of_the_service_are_passed_on_for_the_interface_to_choose_from()
+    {
+        var stems = new FakeStems
+        {
+            Models =
+            [
+                new SeparationModel("htdemucs", "HTDemucs", "demucs", "4stem", ["vocals", "drums", "bass", "other"], "fast", 2.5, true, null, true),
+                new SeparationModel("mel_roformer", "Mel-RoFormer", "roformer", "vocals", ["vocals", "instrumental"], "slow", 0.3, false, "the cleanest vocals"),
+            ],
+        };
+
+        var models = await Client(stems).GetFromJsonAsync<SeparationModel[]>("/api/stems/models");
+
+        // Compared field by field: the record's equality would compare the list of stems by reference.
+        Assert.Equal(2, models!.Length);
+        Assert.Equal(("htdemucs", "HTDemucs", "4stem", "fast"), (models[0].Id, models[0].Name, models[0].Task, models[0].Speed));
+        Assert.Equal(["vocals", "drums", "bass", "other"], models[0].Stems!);
+        Assert.Equal((2.5, true, true), (models[0].RealtimeFactor, models[0].Measured, models[0].IsDefault));
+        Assert.Equal(("mel_roformer", "the cleanest vocals", false), (models[1].Id, models[1].Notes, models[1].IsDefault));
+    }
+
+    [Fact]
+    public async Task Without_a_model_the_service_takes_its_own_default()
+    {
+        var stems = new FakeStems();
+
+        await Client(stems).PostAsync("/api/stems", Flac());
+
+        Assert.Null(stems.Model);
     }
 
     [Fact]
@@ -117,18 +151,27 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
 
         public bool Dereverb { get; private set; }
 
+        /// <summary>The model the endpoint passed on, so that the choice of the interface can be checked.</summary>
+        public string? Model { get; private set; }
+
+        public SeparationModel[] Models { get; init; } = [];
+
         public string? Audio { get; private set; }
 
         public Guid? Deleted { get; private set; }
 
         public StemJob[] Jobs { get; init; } = [];
 
-        public async Task<StemJob> StartAsync(Stream flacAudio, bool dereverb = false, CancellationToken cancellationToken = default)
+        public async Task<StemJob> StartAsync(Stream flacAudio, bool dereverb = false, string? model = null, CancellationToken cancellationToken = default)
         {
             Dereverb = dereverb;
+            Model = model;
             Audio = await new StreamReader(flacAudio).ReadToEndAsync(cancellationToken);
-            return Failure is null ? new StemJob(JobId, StemJobStatus.Queued) : throw Failure;
+            return Failure is null ? new StemJob(JobId, StemJobStatus.Queued, Model: model) : throw Failure;
         }
+
+        public Task<IReadOnlyList<SeparationModel>> ListModelsAsync(CancellationToken cancellationToken = default) =>
+            Failure is null ? Task.FromResult<IReadOnlyList<SeparationModel>>(Models) : throw Failure;
 
         public Task<StemJob> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult(new StemJob(id, StemJobStatus.Completed, 1)) : throw Failure;

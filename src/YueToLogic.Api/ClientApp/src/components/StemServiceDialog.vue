@@ -163,6 +163,7 @@ defineExpose({ open })
       <thead>
         <tr>
           <th>{{ t('stemServiceJob') }}</th>
+          <th>{{ t('stemServiceModel') }}</th>
           <th>{{ t('stemServiceStatus') }}</th>
           <th>{{ t('stemServiceCreated') }}</th>
           <th>{{ t('stemServiceUpdated') }}</th>
@@ -177,6 +178,7 @@ defineExpose({ open })
             <span v-if="job.id === props.ownJob" class="own-mark">{{ t('stemServiceOwn') }}</span>
             <span v-if="job.lastError" class="error">{{ job.lastError }}</span>
           </td>
+          <td class="model">{{ job.model ?? '–' }}</td>
           <td><span class="status" :class="job.status">{{ statusText(job.status) }}</span></td>
           <td class="time">{{ when(job.createdUtc) }}</td>
           <td class="time">{{ when(job.updatedUtc) }}</td>
@@ -285,6 +287,10 @@ code {
   font-size: 0.85rem;
 }
 
+.model {
+  font-size: 0.8rem;
+}
+
 .own-mark {
   display: block;
   color: var(--text-muted);
@@ -351,10 +357,12 @@ code {
 }
 
 @media (max-width: 40rem) {
-  /* Narrow screens do without the two timestamps; the status and the button are what matters there. */
+  /* Narrow screens do without the model and the two timestamps; the status and the button matter there. */
   .time,
-  th:nth-child(3),
-  th:nth-child(4) {
+  .model,
+  th:nth-child(2),
+  th:nth-child(4),
+  th:nth-child(5) {
     display: none;
   }
 }
