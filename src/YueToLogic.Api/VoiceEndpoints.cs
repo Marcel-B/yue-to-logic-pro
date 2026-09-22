@@ -304,7 +304,9 @@ public static class VoiceEndpoints
                 HttpStatusCode.Conflict => StatusCodes.Status409Conflict,
                 HttpStatusCode.Gone => StatusCodes.Status410Gone,
                 HttpStatusCode.TooManyRequests => StatusCodes.Status429TooManyRequests,
-                HttpStatusCode.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
+                // A service that is busy, and a gateway with nothing behind it, are both "try again later".
+                HttpStatusCode.ServiceUnavailable or HttpStatusCode.BadGateway or HttpStatusCode.GatewayTimeout =>
+                    StatusCodes.Status503ServiceUnavailable,
                 _ => StatusCodes.Status502BadGateway,
             });
 
