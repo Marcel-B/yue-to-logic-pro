@@ -52,6 +52,35 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
     }
 
     [Fact]
+    public async Task The_jobs_of_the_service_are_listed_as_it_reports_them()
+    {
+        var created = new DateTimeOffset(2026, 9, 22, 8, 0, 0, TimeSpan.Zero);
+        var stems = new FakeStems
+        {
+            Jobs =
+            [
+                new StemJob(JobId, StemJobStatus.Processing, 2, null, created, created.AddMinutes(5)),
+                new StemJob(Guid.NewGuid(), StemJobStatus.Failed, 3, "the Mac said no", created.AddHours(-1), created),
+            ],
+        };
+
+        var jobs = await Client(stems).GetFromJsonAsync<StemJob[]>("/api/stems/jobs");
+
+        Assert.Equal(stems.Jobs, jobs);
+    }
+
+    [Fact]
+    public async Task A_job_that_is_being_transferred_cannot_be_removed_and_the_client_is_told_why()
+    {
+        var client = Client(new FakeStems { Failure = new StemSeparationException("the job is being transferred", HttpStatusCode.Conflict) });
+
+        var response = await client.DeleteAsync($"/api/stems/{JobId}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("being transferred", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task What_the_stem_service_refuses_is_passed_on_with_its_reason()
     {
         var client = Client(new FakeStems { Failure = new StemSeparationException("the queue is full", HttpStatusCode.TooManyRequests) });
@@ -92,6 +121,8 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
 
         public Guid? Deleted { get; private set; }
 
+        public StemJob[] Jobs { get; init; } = [];
+
         public async Task<StemJob> StartAsync(Stream flacAudio, bool dereverb = false, CancellationToken cancellationToken = default)
         {
             Dereverb = dereverb;
@@ -101,6 +132,9 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
 
         public Task<StemJob> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult(new StemJob(id, StemJobStatus.Completed, 1)) : throw Failure;
+
+        public Task<IReadOnlyList<StemJob>> ListAsync(CancellationToken cancellationToken = default) =>
+            Failure is null ? Task.FromResult<IReadOnlyList<StemJob>>(Jobs) : throw Failure;
 
         public Task<Stream> DownloadAsync(Guid id, CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult<Stream>(new MemoryStream(Encoding.UTF8.GetBytes("PK-stems"))) : throw Failure;

@@ -122,10 +122,16 @@ export interface ConversionOptions {
 export interface StemJob {
   id: string
   /** queued, processing, completed or failed. */
-  status: string
+  status: StemJobStatus | string
   attempts: number
   lastError: string | null
+  /** ISO 8601; when the recording was handed over. Only the list of jobs carries the timestamps. */
+  createdUtc: string | null
+  /** ISO 8601; when the service last changed the job. */
+  updatedUtc: string | null
 }
+
+export type StemJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
 
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const

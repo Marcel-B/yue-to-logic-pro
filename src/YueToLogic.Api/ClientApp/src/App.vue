@@ -16,6 +16,7 @@ import ResultView from './components/ResultView.vue'
 import ScorePreview from './components/ScorePreview.vue'
 import FileDropZone from './components/FileDropZone.vue'
 import StemPanel from './components/StemPanel.vue'
+import StemServiceDialog from './components/StemServiceDialog.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
@@ -38,7 +39,23 @@ const stems = ref(false)
 const stemJob = ref<string | null>(null)
 /** A separation in progress; the result view says so next to its Logic button. */
 const stemsRunning = ref(false)
+/** The job the stem panel is about, running or finished; the service dialog marks it as this session's. */
+const stemTracked = ref<string | null>(null)
+const stemPanel = useTemplateRef<InstanceType<typeof StemPanel>>('stemPanel')
+const stemServiceDialog = useTemplateRef<InstanceType<typeof StemServiceDialog>>('stemServiceDialog')
 void stemsAvailable().then((available) => (stems.value = available))
+
+function openStemService(): void {
+  stemServiceDialog.value?.open()
+}
+
+/** A job removed in the service dialog: if it was this session's, the panel and the export let go of it too. */
+function stemJobDeleted(id: string): void {
+  stemPanel.value?.forget(id)
+  if (stemJob.value === id) {
+    stemJob.value = null
+  }
+}
 
 /** The instrument library and which track plays which, both kept on the server. */
 const instruments = ref<Instrument[]>([])
@@ -284,9 +301,31 @@ async function convert(): Promise<void> {
       <p class="muted">{{ t('subtitle') }}</p>
     </div>
     <div class="header-actions">
-      <button type="button" class="button secondary small" :title="t('instrumentsManageTitle')" @click="openInstruments">
-        {{ t('instrumentsManage') }}
-      </button>
+      <div class="tools" role="group">
+        <!-- Icons rather than words: the header stays one line, and the title says what each one opens. -->
+        <button type="button" class="icon-button" :title="t('instrumentsManageTitle')" :aria-label="t('instrumentsManage')" @click="openInstruments">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+            <circle cx="9" cy="6" r="2" />
+            <circle cx="15" cy="12" r="2" />
+            <circle cx="7" cy="18" r="2" />
+          </svg>
+        </button>
+        <button
+          v-if="stems"
+          type="button"
+          class="icon-button"
+          :title="t('stemServiceManageTitle')"
+          :aria-label="t('stemServiceManage')"
+          @click="openStemService"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12h2l2-6 3 12 3-14 3 16 3-10 2 2h2" />
+          </svg>
+        </button>
+      </div>
       <button type="button" class="button secondary small" :title="t('resetTitle')" @click="reset">{{ t('reset') }}</button>
       <div class="locale" role="group" aria-label="Language">
       <button type="button" :aria-pressed="locale === 'de'" @click="setLocale('de')">DE</button>
@@ -330,8 +369,10 @@ async function convert(): Promise<void> {
         />
         <StemPanel
           v-if="stems"
+          ref="stemPanel"
           v-model:job="stemJob"
           v-model:running="stemsRunning"
+          v-model:tracked="stemTracked"
           :audio="audio"
           :output-name="outputName"
           @export-logic="exportLogic"
@@ -402,6 +443,7 @@ async function convert(): Promise<void> {
     />
 
     <InstrumentDialog ref="instrumentDialog" :instruments="instruments" @changed="instrumentsChanged" />
+    <StemServiceDialog v-if="stems" ref="stemServiceDialog" :own-job="stemTracked" @deleted="stemJobDeleted" />
   </main>
 </template>
 
@@ -434,6 +476,43 @@ h1 {
 .button.small {
   padding: 0.3rem 0.75rem;
   font-size: 0.8rem;
+}
+
+.tools {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-button svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .locale {

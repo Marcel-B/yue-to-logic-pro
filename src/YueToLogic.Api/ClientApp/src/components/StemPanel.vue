@@ -16,6 +16,12 @@ const props = defineProps<{
  */
 const job = defineModel<string | null>('job', { required: true })
 
+/**
+ * The job this panel is about, running or finished: the stem service dialog marks it as this session's,
+ * so that it is not cancelled by mistake when the queue is being cleared.
+ */
+const tracked = defineModel<string | null>('tracked', { default: null })
+
 /** Asks the app to write a Logic project now, which takes the stems along and confirms the import. */
 const emit = defineEmits<{ exportLogic: [] }>()
 
@@ -25,6 +31,8 @@ const pollMilliseconds = 5000
 const dereverb = ref(false)
 const status = ref<string | null>(null)
 const error = ref<string | null>(null)
+/** What happened to the job outside this panel, e.g. that it was removed in the stem service dialog. */
+const note = ref<string | null>(null)
 /** Whether a separation is running, which the result view says next to its Logic button. */
 const busy = defineModel<boolean>('running', { required: true })
 const downloading = ref(false)
@@ -60,9 +68,30 @@ function reset(): void {
   close()
   jobId = null
   job.value = null
+  tracked.value = null
+  status.value = null
+  error.value = null
+  note.value = null
+  busy.value = false
+}
+
+/**
+ * The job was removed in the stem service dialog, so there is nothing left to poll or to export: the panel
+ * stops and says so, instead of running into the service's "unknown job" on the next poll.
+ */
+function forget(id: string): void {
+  if (id !== tracked.value) {
+    return
+  }
+
+  window.clearTimeout(timer)
+  jobId = null
+  job.value = null
+  tracked.value = null
   status.value = null
   error.value = null
   busy.value = false
+  note.value = t('stemsRemovedElsewhere')
 }
 
 async function start(): Promise<void> {
@@ -75,6 +104,7 @@ async function start(): Promise<void> {
   try {
     const started = await startStemJob(props.audio, dereverb.value)
     jobId = started.id
+    tracked.value = started.id
     status.value = started.status
     poll()
   } catch (caught) {
@@ -138,6 +168,7 @@ function discard(): void {
     void confirmStems(job.value)
     job.value = null
   }
+  tracked.value = null
   status.value = null
 }
 
@@ -150,6 +181,8 @@ function fail(caught: unknown): void {
   busy.value = false
   window.clearTimeout(timer)
 }
+
+defineExpose({ forget })
 </script>
 
 <template>
@@ -177,6 +210,7 @@ function fail(caught: unknown): void {
     <p v-if="!audio" class="hint muted">{{ t('stemsNeedsAudio') }}</p>
     <p v-else-if="busy && statusText" class="hint">{{ statusText }}</p>
     <p v-else-if="job" class="hint">{{ t('stemsWaiting') }}</p>
+    <p v-else-if="note" class="hint muted">{{ note }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
 
     <dialog ref="dialog" class="stem-dialog" @cancel.prevent="close">

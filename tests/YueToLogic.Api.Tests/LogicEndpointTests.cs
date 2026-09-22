@@ -208,6 +208,9 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         public Task<StemJob> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult(new StemJob(id, StemJobStatus.Completed));
 
+        public Task<IReadOnlyList<StemJob>> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<StemJob>>([new StemJob(Job, StemJobStatus.Completed)]);
+
         public Task<Stream> DownloadAsync(Guid id, CancellationToken cancellationToken = default)
         {
             if (Failure is not null)
