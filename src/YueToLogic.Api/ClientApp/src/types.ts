@@ -129,3 +129,27 @@ export interface StemJob {
 
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const
+
+/** A hardware instrument as the server keeps it: a name for a MIDI port (as Web MIDI names it) and a channel, 1-16. */
+export interface Instrument {
+  id: number
+  name: string
+  port: string
+  channel: number
+}
+
+export interface InstrumentInput {
+  name: string
+  port: string
+  channel: number
+}
+
+/** Track name → id of the instrument that plays it. */
+export type Assignments = Record<string, number>
+
+/** What the Logic export is told about a track's instrument. */
+export interface LogicInstrument {
+  name: string
+  port: string
+  channel: number
+}

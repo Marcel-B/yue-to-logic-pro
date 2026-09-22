@@ -19,8 +19,13 @@ services:
       # StemMyWav, which separates a recording into stems. Without both values the app offers no stems.
       Stems__BaseUrl: ${STEMS_BASE_URL:-}
       Stems__ApiKey: ${STEMS_API_KEY:-}
+      # The instrument library, a SQLite file in the volume below.
+      Data__Path: /data/yue-to-logic.db
       TZ: ${TZ:-Europe/Berlin}
-    # The app keeps no state: nothing is written except temporary files.
+    volumes:
+      # A name means a docker volume, a path a host directory (which must be writable by uid 1654, see .env.example).
+      - ${DATA_DIR:-data}:/data
+    # The root file system stays read-only; the only state, the instrument library, lives in /data.
     read_only: true
     tmpfs:
       - /tmp
@@ -39,6 +44,9 @@ services:
     # networks:
     #   - default
     #   - stemmywav
+
+volumes:
+  data:
 
 # networks:
 #   stemmywav:

@@ -1,6 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { ApiError, convertScore, exportLogicProject, LogicExportError, stemsAvailable } from './api'
+import { computed, ref, useTemplateRef, watch } from 'vue'
+import {
+  ApiError,
+  assignInstrument,
+  convertScore,
+  exportLogicProject,
+  listAssignments,
+  listInstruments,
+  LogicExportError,
+  stemsAvailable,
+} from './api'
+import InstrumentDialog from './components/InstrumentDialog.vue'
 import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
 import ScorePreview from './components/ScorePreview.vue'
@@ -8,10 +18,12 @@ import FileDropZone from './components/FileDropZone.vue'
 import StemPanel from './components/StemPanel.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
+import { instrumentsForExport, withInstrumentChannels } from './instruments'
+import { midiUsable } from './player'
 import { deletePreset, loadPresets, savePreset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
-import type { ConversionResult, Diagnostic } from './types'
+import type { Assignments, ConversionResult, Diagnostic, Instrument } from './types'
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
@@ -27,6 +39,67 @@ const stemJob = ref<string | null>(null)
 /** A separation in progress; the result view says so next to its Logic button. */
 const stemsRunning = ref(false)
 void stemsAvailable().then((available) => (stems.value = available))
+
+/** The instrument library and which track plays which, both kept on the server. */
+const instruments = ref<Instrument[]>([])
+const assignments = ref<Assignments>({})
+/**
+ * Outside Chromium no port can be picked, so the instruments are only shown and not applied: the preview, the
+ * MIDI file and the Logic project then follow what the routing table offers there, the manual choices.
+ */
+const appliedAssignments = computed(() => (midiUsable() ? assignments.value : {}))
+const instrumentsError = ref<string | null>(null)
+const instrumentDialog = useTemplateRef<InstanceType<typeof InstrumentDialog>>('instrumentDialog')
+void loadInstruments()
+
+async function loadInstruments(): Promise<void> {
+  try {
+    ;[instruments.value, assignments.value] = await Promise.all([listInstruments(), listAssignments()])
+  } catch (caught) {
+    // Without the library everything else still works; the routing table then shows ports and channels only.
+    instrumentsError.value = t('instrumentsError', { message: caught instanceof Error ? caught.message : String(caught) })
+  }
+}
+
+function openInstruments(): void {
+  instrumentDialog.value?.open()
+}
+
+/** The list after the dialog changed it; a track whose instrument is gone loses its assignment, as on the server. */
+function instrumentsChanged(list: Instrument[]): void {
+  instruments.value = list
+  const ids = new Set(list.map((instrument) => instrument.id))
+  assignments.value = Object.fromEntries(Object.entries(assignments.value).filter(([, id]) => ids.has(id)))
+}
+
+/** Shown at once and sent to the server; if that fails the previous choice comes back. */
+async function assign(track: string, instrumentId: number | null): Promise<void> {
+  const before = { ...assignments.value }
+  const next = { ...assignments.value }
+  if (instrumentId === null) {
+    delete next[track]
+  } else {
+    next[track] = instrumentId
+  }
+  assignments.value = next
+  instrumentsError.value = null
+  try {
+    await assignInstrument(track, instrumentId)
+  } catch (caught) {
+    assignments.value = before
+    instrumentsError.value =
+      caught instanceof ApiError && caught.status === 0
+        ? t('networkError')
+        : t('instrumentsError', { message: caught instanceof Error ? caught.message : String(caught) })
+  }
+}
+
+/** The channel a track plays on depends on its instrument, so the downloads are only current for the assignment they were made with. */
+watch(assignments, () => {
+  if (result.value) {
+    stale.value = true
+  }
+})
 
 const presets = ref(loadPresets())
 /** The preset the form currently shows; empty once a preset is saved under a new name or none is chosen. */
@@ -121,10 +194,11 @@ async function exportLogic(): Promise<void> {
     const exported = await exportLogicProject(
       file.value,
       audio.value,
-      toConversionOptions(form.value, audioLength.value),
+      conversionOptions(),
       outputName.value,
       form.value.splitSections,
       stemJob.value,
+      instrumentsForExport(appliedAssignments.value, instruments.value),
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
@@ -165,6 +239,11 @@ function reset(): void {
   logicWarnings.value = []
 }
 
+/** The form's options with every assigned track on its instrument's channel. */
+function conversionOptions() {
+  return withInstrumentChannels(toConversionOptions(form.value, audioLength.value), appliedAssignments.value, instruments.value)
+}
+
 async function convert(): Promise<void> {
   if (!file.value) {
     return
@@ -177,7 +256,7 @@ async function convert(): Promise<void> {
   error.value = null
 
   try {
-    result.value = await convertScore(file.value, toConversionOptions(form.value, audioLength.value), controller.signal)
+    result.value = await convertScore(file.value, conversionOptions(), controller.signal)
     stale.value = false
   } catch (caught) {
     if (caught instanceof DOMException && caught.name === 'AbortError') {
@@ -204,6 +283,9 @@ async function convert(): Promise<void> {
       <p class="muted">{{ t('subtitle') }}</p>
     </div>
     <div class="header-actions">
+      <button type="button" class="button secondary small" :title="t('instrumentsManageTitle')" @click="openInstruments">
+        {{ t('instrumentsManage') }}
+      </button>
       <button type="button" class="button secondary small" :title="t('resetTitle')" @click="reset">{{ t('reset') }}</button>
       <div class="locale" role="group" aria-label="Language">
       <button type="button" :aria-pressed="locale === 'de'" @click="setLocale('de')">DE</button>
@@ -213,6 +295,8 @@ async function convert(): Promise<void> {
   </header>
 
   <main>
+    <p v-if="instrumentsError" class="hint danger" role="alert">{{ instrumentsError }}</p>
+
     <div class="files">
       <section class="card">
         <h2>{{ t('scoreTitle') }}</h2>
@@ -296,6 +380,10 @@ async function convert(): Promise<void> {
       :score="result.score"
       :include-chords="form.includeChords"
       :stale="stale"
+      :instruments="instruments"
+      :assignments="appliedAssignments"
+      @assign="assign"
+      @manage-instruments="openInstruments"
     />
 
     <ResultView
@@ -311,6 +399,8 @@ async function convert(): Promise<void> {
       :logic-warnings="logicWarnings"
       @export-logic="exportLogic"
     />
+
+    <InstrumentDialog ref="instrumentDialog" :instruments="instruments" @changed="instrumentsChanged" />
   </main>
 </template>
 

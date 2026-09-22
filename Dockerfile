@@ -36,5 +36,12 @@ COPY --from=client /src/dist ./wwwroot/ui
 # The base image listens on 8080 (ASPNETCORE_HTTP_PORTS) and provides the unprivileged user "app".
 ENV DOTNET_NOLOGO=true
 EXPOSE 8080
+
+# The instrument library is one SQLite file under /data, the only place the app writes to besides /tmp.
+# The directory belongs to the app user, which a named volume created from it inherits; a bind mount does not.
+ENV Data__Path=/data/yue-to-logic.db
+RUN mkdir -p /data && chown $APP_UID:$APP_UID /data
+VOLUME /data
+
 USER $APP_UID
 ENTRYPOINT ["dotnet", "YueToLogic.Api.dll"]

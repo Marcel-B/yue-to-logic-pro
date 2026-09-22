@@ -90,6 +90,37 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         Assert.Equal(1 + (2 * 2) + 9, await PlacementCountAsync(split));
     }
 
+    [Fact]
+    public async Task An_instrument_names_the_logic_track_and_puts_it_on_the_instrument_channel()
+    {
+        const string instruments = """{"Bass":{"name":"Mother32","port":"MIDI4x4 Midi Out 1","channel":12}}""";
+        var response = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), instruments: instruments));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var projectData = await ProjectDataAsync(response);
+        Assert.Contains(Encoding.UTF8.GetBytes("Bass · Mother32"), projectData);
+    }
+
+    [Fact]
+    public async Task Malformed_instruments_are_a_bad_request()
+    {
+        var notJson = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), instruments: "{not json"));
+        var badChannel = await _client.PostAsync("/api/convert/logic", Form(SampleScore, Flac(1_047_273), instruments: """{"Bass":{"name":"Mother32","channel":17}}"""));
+
+        Assert.Equal(HttpStatusCode.BadRequest, notJson.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, badChannel.StatusCode);
+        Assert.Contains("Bass", await badChannel.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    private static async Task<byte[]> ProjectDataAsync(HttpResponseMessage response)
+    {
+        using var archive = new ZipArchive(await response.Content.ReadAsStreamAsync());
+        await using var stream = archive.Entries.Single(e => e.FullName.EndsWith("/Alternatives/000/ProjectData", StringComparison.Ordinal)).Open();
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        return buffer.ToArray();
+    }
+
     /// <summary>The regions the project's arrangement holds: 80 bytes each, before its 16-byte terminator.</summary>
     private static async Task<int> PlacementCountAsync(HttpResponseMessage response)
     {
@@ -227,7 +258,13 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         return [.. header, .. new byte[1024]];
     }
 
-    private static MultipartFormDataContent Form(string score, byte[]? audio, string? name = null, bool? splitSections = null, Guid? stemJob = null)
+    private static MultipartFormDataContent Form(
+        string score,
+        byte[]? audio,
+        string? name = null,
+        bool? splitSections = null,
+        Guid? stemJob = null,
+        string? instruments = null)
     {
         var form = new MultipartFormDataContent();
         var scoreContent = new StringContent(score, Encoding.UTF8);
@@ -253,6 +290,11 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         if (splitSections is { } split)
         {
             form.Add(new StringContent(split ? "true" : "false"), "splitSections");
+        }
+
+        if (instruments is not null)
+        {
+            form.Add(new StringContent(instruments, Encoding.UTF8), "instruments");
         }
 
         return form;
