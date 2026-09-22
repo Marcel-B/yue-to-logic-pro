@@ -13,7 +13,9 @@ namespace YueToLogic.Api;
 /// <remarks>
 /// Separation takes minutes, so the client starts a job, asks for its state now and then, and downloads the
 /// result once it is done. Confirming the import with DELETE lets the service drop the files at once;
-/// unconfirmed jobs are removed by it after a day.
+/// unconfirmed jobs are removed by it after a day. The service takes only a couple of waiting jobs, so the
+/// list of all jobs is passed through as well: the stem service has no interface of its own, and this is
+/// where a job that blocks the queue is found and removed.
 /// </remarks>
 public static class StemEndpoints
 {
@@ -34,6 +36,10 @@ public static class StemEndpoints
             .WithName("StartStemJob")
             .WithSummary("Hands the audio.flac to the stem service; the body is the raw file.");
 
+        stems.MapGet("/jobs", ListAsync)
+            .WithName("StemJobs")
+            .WithSummary("Every job the stem service knows, newest first; what is holding its queue up.");
+
         stems.MapGet("/{id:guid}", GetAsync)
             .WithName("StemJobStatus")
             .WithSummary("The state of a job: queued, processing, completed or failed.");
@@ -44,7 +50,7 @@ public static class StemEndpoints
 
         stems.MapDelete("/{id:guid}", DeleteAsync)
             .WithName("DeleteStemJob")
-            .WithSummary("Confirms the import, whereupon the stem service removes the result.");
+            .WithSummary("Confirms the import, whereupon the stem service removes the result; cancels a job that is still queued.");
 
         return api;
     }
@@ -79,6 +85,24 @@ public static class StemEndpoints
         Service(services) is not { } service
             ? Unavailable()
             : await CallAsync(() => service.GetAsync(id, cancellationToken)).ConfigureAwait(false);
+
+    private static async Task<IResult> ListAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        if (Service(services) is not { } service)
+        {
+            return Unavailable();
+        }
+
+        try
+        {
+            var jobs = await service.ListAsync(cancellationToken).ConfigureAwait(false);
+            return Results.Json(jobs.ToArray(), YueToLogicJsonContext.Default.StemJobArray);
+        }
+        catch (StemSeparationException exception)
+        {
+            return Failed(exception);
+        }
+    }
 
     private static async Task<IResult> DownloadAsync(Guid id, IServiceProvider services, CancellationToken cancellationToken)
     {
@@ -128,14 +152,20 @@ public static class StemEndpoints
         }
     }
 
-    /// <summary>The service's own refusal, handed on with its status so the client can tell them apart.</summary>
+    /// <summary>
+    /// The service's own refusal, handed on with its status so the client can tell them apart: a job that is
+    /// gone (404) and one that cannot be removed while it is being transferred (409) are answers, not failures.
+    /// </summary>
     private static IResult Failed(StemSeparationException exception) =>
         Results.Problem(
             title: "Stem separation failed",
             detail: exception.Message,
-            statusCode: exception.StatusCode is HttpStatusCode.NotFound
-                ? StatusCodes.Status404NotFound
-                : StatusCodes.Status502BadGateway);
+            statusCode: exception.StatusCode switch
+            {
+                HttpStatusCode.NotFound => StatusCodes.Status404NotFound,
+                HttpStatusCode.Conflict => StatusCodes.Status409Conflict,
+                _ => StatusCodes.Status502BadGateway,
+            });
 
     private static IResult Unavailable() =>
         Results.Problem(

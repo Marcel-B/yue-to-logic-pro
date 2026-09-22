@@ -158,6 +158,32 @@ const messages = {
     previewInstrumentHint: 'Ein Instrument legt Ausgang und Kanal fest, ein Drumcomputer auch die Noten der Schlagzeugspur, die ihn spielt; „Alle Spuren auf“ betrifft nur die Spuren ohne Instrument. Klick in die Darstellung setzt die Abspielposition.',
     instrumentsManage: 'Instrumente …',
     instrumentsManageTitle: 'Instrumente anlegen: ein Name für MIDI-Ausgang und Kanal',
+    stemServiceManage: 'Stem-Dienst',
+    stemServiceManageTitle: 'Aufträge des Stem-Dienstes ansehen, abbrechen und löschen',
+    stemServiceTitle: 'Stem-Dienst',
+    stemServiceIntro: 'Alle Aufträge, die StemMyWav kennt, jüngste zuerst. Der Dienst nimmt nur wenige wartende Aufträge an – meldet er „Warteschlange voll“, steht hier, was sie belegt. Ein wartender Auftrag lässt sich abbrechen, ein fertiger oder fehlgeschlagener löschen; von selbst räumt der Dienst sie erst nach einem Tag weg.',
+    stemServiceRefresh: 'Aktualisieren',
+    stemServiceRefreshed: 'Stand {time}',
+    stemServiceLoading: 'lädt …',
+    stemServiceEmpty: 'Der Dienst hat gerade keine Aufträge.',
+    stemServiceJob: 'Auftrag',
+    stemServiceStatus: 'Status',
+    stemServiceCreated: 'Angelegt',
+    stemServiceUpdated: 'Zuletzt geändert',
+    stemServiceAttempts: 'Versuche',
+    stemServiceOwn: 'aus dieser Sitzung',
+    stemServiceStatusQueued: 'wartet',
+    stemServiceStatusProcessing: 'wird getrennt',
+    stemServiceStatusCompleted: 'fertig',
+    stemServiceStatusFailed: 'fehlgeschlagen',
+    stemServiceCancel: 'Abbrechen',
+    stemServiceDelete: 'Löschen',
+    stemServiceLocked: 'Wird gerade zum Mac übertragen; solange lässt sich der Auftrag nicht löschen.',
+    stemServiceCancelConfirm: 'Den wartenden Auftrag {id} abbrechen? Die hochgeladene Aufnahme wird verworfen.',
+    stemServiceDeleteConfirm: 'Den Auftrag {id} löschen? Seine Stems sind danach weg.',
+    stemServiceError: 'Der Stem-Dienst antwortet nicht: {message}',
+    stemServiceClose: 'Schließen',
+    stemsRemovedElsewhere: 'Der Auftrag dieser Sitzung wurde im Stem-Dienst gelöscht.',
     instrumentsTitle: 'Instrumente',
     instrumentsIntro: 'Ein Instrument ist ein Name für einen MIDI-Ausgang und Kanal, etwa „Mother32“ für „MIDI4x4 Midi Out 1“, Kanal 12. Ein Drumcomputer bringt dazu die Noten seiner Trommeln mit. Die Liste liegt auf dem Server, jeder Browser sieht dieselbe.',
     instrumentsEmpty: 'Noch keine Instrumente.',
@@ -372,6 +398,32 @@ const messages = {
     previewInstrumentHint: 'An instrument sets output and channel, a drum machine also the notes of the drum track that plays it; “Send every track to” only affects tracks without one. Click the roll to set the playing position.',
     instrumentsManage: 'Instruments …',
     instrumentsManageTitle: 'Set up instruments: a name for a MIDI output and channel',
+    stemServiceManage: 'Stem service',
+    stemServiceManageTitle: 'See, cancel and remove the stem service’s jobs',
+    stemServiceTitle: 'Stem service',
+    stemServiceIntro: 'Every job StemMyWav knows, newest first. The service takes only a few waiting jobs — when it says “queue full”, this is what is holding it up. A waiting job can be cancelled, a finished or failed one removed; on its own the service clears them only after a day.',
+    stemServiceRefresh: 'Refresh',
+    stemServiceRefreshed: 'As of {time}',
+    stemServiceLoading: 'loading …',
+    stemServiceEmpty: 'The service has no jobs right now.',
+    stemServiceJob: 'Job',
+    stemServiceStatus: 'Status',
+    stemServiceCreated: 'Created',
+    stemServiceUpdated: 'Last change',
+    stemServiceAttempts: 'Attempts',
+    stemServiceOwn: 'from this session',
+    stemServiceStatusQueued: 'queued',
+    stemServiceStatusProcessing: 'separating',
+    stemServiceStatusCompleted: 'done',
+    stemServiceStatusFailed: 'failed',
+    stemServiceCancel: 'Cancel',
+    stemServiceDelete: 'Delete',
+    stemServiceLocked: 'Being transferred to the Mac right now; the job cannot be removed until that is over.',
+    stemServiceCancelConfirm: 'Cancel the waiting job {id}? The uploaded recording is discarded.',
+    stemServiceDeleteConfirm: 'Delete job {id}? Its stems are gone afterwards.',
+    stemServiceError: 'The stem service does not answer: {message}',
+    stemServiceClose: 'Close',
+    stemsRemovedElsewhere: 'This session’s job was removed in the stem service.',
     instrumentsTitle: 'Instruments',
     instrumentsIntro: 'An instrument is a name for a MIDI output and channel, say “Mother32” for “MIDI4x4 Midi Out 1”, channel 12. A drum machine also brings the notes of its drums. The list lives on the server; every browser sees the same one.',
     instrumentsEmpty: 'No instruments yet.',
@@ -467,6 +519,12 @@ export function t(key: MessageKey, params: Record<string, string | number> = {})
 
 export function formatNumber(value: number, maximumFractionDigits = 1): string {
   return value.toLocaleString(locale.value, { maximumFractionDigits })
+}
+
+/** An ISO timestamp as the locale writes date and time, e.g. "22.09.2026, 10:05"; the text itself when it cannot be read. */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(locale.value, { dateStyle: 'short', timeStyle: 'short' })
 }
 
 /** 309.4 → "5:09" */

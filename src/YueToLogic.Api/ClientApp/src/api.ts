@@ -153,6 +153,20 @@ export async function confirmStems(id: string): Promise<void> {
   await request(`/api/stems/${id}`, { method: 'DELETE' }).catch(() => undefined)
 }
 
+/** Every job the stem service knows, newest first: what is holding its queue up. */
+export async function listStemJobs(signal?: AbortSignal): Promise<StemJob[]> {
+  return (await request('/api/stems/jobs', { signal })).json() as Promise<StemJob[]>
+}
+
+/**
+ * Removes a job from the stem service: cancels one that is still queued, drops the result of a finished one.
+ * Unlike `confirmStems` this reports failure, since the user asked for it: 409 while the job is being
+ * transferred to the Mac, 404 when it is gone already.
+ */
+export async function deleteStemJob(id: string): Promise<void> {
+  await request(`/api/stems/${id}`, { method: 'DELETE' })
+}
+
 // ---- Instruments -------------------------------------------------------------------------------
 
 export async function listInstruments(): Promise<Instrument[]> {
