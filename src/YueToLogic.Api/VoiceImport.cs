@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using YueToLogic.Core.Diagnostics;
 using YueToLogic.Core.Logic;
 using YueToLogic.Core.Voices;
@@ -13,7 +14,8 @@ namespace YueToLogic.Api;
 /// The Logic template's audio tracks are prepared for 48 kHz, which is what YuE writes and what StemMyWav
 /// hands back. ChangeMyVoice works at its model's own rate, so what comes back is checked here rather than in
 /// the writer: a recording Logic cannot take leaves the project with the separated vocals and a warning,
-/// instead of failing an export that is otherwise fine.
+/// instead of failing an export that is otherwise fine. The service names the result's checksum, which is
+/// compared as well - a transfer that broke off would otherwise end up in the project as a truncated file.
 /// </remarks>
 public sealed class VoiceImport : IAsyncDisposable
 {
@@ -41,6 +43,9 @@ public sealed class VoiceImport : IAsyncDisposable
 
         try
         {
+            // The status is asked for first, because it carries the checksum the transfer is measured against.
+            var state = await service.GetJobAsync(job, cancellationToken).ConfigureAwait(false);
+
             var converted = TemporaryFile();
             import.file = converted;
             await using (var result = await service.DownloadResultAsync(job, cancellationToken).ConfigureAwait(false))
@@ -49,7 +54,7 @@ public sealed class VoiceImport : IAsyncDisposable
             }
 
             converted.Position = 0;
-            await import.CheckAsync(cancellationToken).ConfigureAwait(false);
+            await import.CheckAsync(state.ResultSha256, cancellationToken).ConfigureAwait(false);
         }
         catch (VoiceConversionException exception)
         {
@@ -63,14 +68,26 @@ public sealed class VoiceImport : IAsyncDisposable
     public async ValueTask DisposeAsync() => await DropAsync().ConfigureAwait(false);
 
     /// <summary>
-    /// Reads the header to see whether Logic can take the file at all. The stream is rewound afterwards, so
-    /// the writer still gets it from the first byte.
+    /// Checks that the file arrived whole and that Logic can take it at all. The stream is rewound after
+    /// every read, so the writer still gets it from the first byte.
     /// </summary>
-    private async Task CheckAsync(CancellationToken cancellationToken)
+    private async Task CheckAsync(string? expectedSha256, CancellationToken cancellationToken)
     {
         if (file is null)
         {
             return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(expectedSha256))
+        {
+            var hash = Convert.ToHexString(await SHA256.HashDataAsync(file, cancellationToken).ConfigureAwait(false));
+            file.Position = 0;
+            if (!hash.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                await DropAsync().ConfigureAwait(false);
+                Problem = Warning("The converted vocals did not arrive whole - their checksum differs from the one the voice service named; the project keeps the separated vocals.");
+                return;
+            }
         }
 
         var header = new byte[AudioStreamInfo.HeaderLength];

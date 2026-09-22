@@ -106,7 +106,10 @@ function fail(caught: unknown): void {
   error.value =
     caught instanceof ApiError && caught.status === 0
       ? t('networkError')
-      : t('voicesError', { message: caught instanceof Error ? caught.message : String(caught) })
+      : caught instanceof ApiError && (caught.status === 429 || caught.status === 503)
+        // A rate limit or a full queue: the same request is worth repeating later, unlike a refused recording.
+        ? t('voiceRetryLater', { message: caught.message })
+        : t('voicesError', { message: caught instanceof Error ? caught.message : String(caught) })
 }
 
 defineExpose({ open })

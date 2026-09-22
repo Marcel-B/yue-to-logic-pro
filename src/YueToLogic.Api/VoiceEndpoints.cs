@@ -291,7 +291,8 @@ public static class VoiceEndpoints
 
     /// <summary>
     /// The service's own refusal, handed on with its status so the client can tell them apart: something that
-    /// is gone (404) and a voice that a job still waits for (409) are answers, not failures.
+    /// is gone (404), a name that is taken or a voice a job still waits for (409) are answers, not failures.
+    /// A rate limit (429) and a full queue (503) keep their status too, since those are worth trying again.
     /// </summary>
     private static IResult Failed(VoiceConversionException exception) =>
         Results.Problem(
@@ -302,6 +303,8 @@ public static class VoiceEndpoints
                 HttpStatusCode.NotFound => StatusCodes.Status404NotFound,
                 HttpStatusCode.Conflict => StatusCodes.Status409Conflict,
                 HttpStatusCode.Gone => StatusCodes.Status410Gone,
+                HttpStatusCode.TooManyRequests => StatusCodes.Status429TooManyRequests,
+                HttpStatusCode.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
                 _ => StatusCodes.Status502BadGateway,
             });
 

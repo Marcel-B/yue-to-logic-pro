@@ -224,7 +224,14 @@ function close(): void {
 }
 
 function fail(caught: unknown): void {
-  error.value = caught instanceof ApiError && caught.status === 0 ? t('networkError') : `${caught}`
+  if (caught instanceof ApiError && caught.status === 0) {
+    error.value = t('networkError')
+  } else if (caught instanceof ApiError && (caught.status === 429 || caught.status === 503)) {
+    // A rate limit or a full queue: the same request is worth repeating later, unlike a refused recording.
+    error.value = t('voiceRetryLater', { message: caught.message })
+  } else {
+    error.value = caught instanceof Error ? caught.message : String(caught)
+  }
   busy.value = false
   window.clearTimeout(timer)
 }

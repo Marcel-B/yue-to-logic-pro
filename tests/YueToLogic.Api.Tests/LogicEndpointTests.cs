@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -198,7 +199,9 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
     public async Task The_converted_vocals_of_a_voice_job_take_the_vocals_track()
     {
         var stems = new FakeStems();
-        var voice = new FakeVoice(Wave(48000, 1, 16, 500_000));
+        var converted = Wave(48000, 1, 16, 500_000);
+        // The checksum the service names matches, so the file went through whole.
+        var voice = new FakeVoice(converted) { Sha = Convert.ToHexString(SHA256.HashData(converted)) };
         var client = Services(stems, voice);
 
         var response = await client.PostAsync(
@@ -246,6 +249,32 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         Assert.Null(voice.Deleted);
     }
 
+    /// <summary>
+    /// The service names the checksum of its result, so a transfer that broke off can be told from a whole
+    /// one. A truncated WAV in the project would be worse than none.
+    /// </summary>
+    [Fact]
+    public async Task Converted_vocals_that_did_not_arrive_whole_leave_the_separated_ones_in_the_project()
+    {
+        var stems = new FakeStems();
+        var voice = new FakeVoice(Wave(48000, 1, 16, 500_000)) { Sha = new string('a', 64) };
+        var client = Services(stems, voice);
+
+        var response = await client.PostAsync(
+            "/api/convert/logic",
+            Form(SampleScore, Flac(1_047_273), stemJob: FakeStems.Job, voiceJob: FakeVoice.Job));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var warnings = JsonSerializer.Deserialize(
+            Assert.Single(response.Headers.GetValues(ConvertEndpoints.DiagnosticsHeader)),
+            YueToLogicJsonContext.Default.DiagnosticArray)!;
+        Assert.Contains(warnings, w => w.Code == DiagnosticCodes.VoiceUnavailable);
+
+        using var archive = new ZipArchive(await response.Content.ReadAsStreamAsync());
+        Assert.Equal(2, Channels(archive, "vocals.wav"));
+        Assert.Null(voice.Deleted);
+    }
+
     private HttpClient Services(IStemSeparationService stems, IVoiceConversionService voice) =>
         factory
             .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
@@ -271,6 +300,9 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
 
         public byte[] Result { get; } = result;
 
+        /// <summary>The checksum the service names for its result; null when it names none.</summary>
+        public string? Sha { get; init; }
+
         public string? Deleted { get; private set; }
 
         public Task<IReadOnlyList<ReferenceVoice>> ListVoicesAsync(CancellationToken cancellationToken = default) =>
@@ -290,7 +322,7 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
             Task.FromResult(new VoiceJob(Job, VoiceJobStatus.Queued, voiceId));
 
         public Task<VoiceJob> GetJobAsync(string jobId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new VoiceJob(jobId, VoiceJobStatus.Completed));
+            Task.FromResult(new VoiceJob(jobId, VoiceJobStatus.Completed, ResultSha256: Sha));
 
         public Task<VoiceJobPage> ListJobsAsync(
             string? status = null,

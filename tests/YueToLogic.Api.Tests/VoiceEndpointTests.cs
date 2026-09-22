@@ -165,21 +165,33 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
         Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
     }
 
+    /// <summary>
+    /// The service's own status is kept, since the interface acts on it: a name that is taken (409) is shown
+    /// at the form, and a full queue (503) or a rate limit (429) is worth trying again, unlike the rest.
+    /// </summary>
     [Fact]
-    public async Task What_the_voice_service_refuses_is_passed_on_with_its_reason()
+    public async Task What_the_voice_service_refuses_is_passed_on_with_its_reason_and_its_status()
     {
-        var busy = Client(new FakeVoice { Failure = new VoiceConversionException("the queue is full", HttpStatusCode.ServiceUnavailable) });
-        var waited = Client(new FakeVoice { Failure = new VoiceConversionException("a job still waits for it", HttpStatusCode.Conflict) });
-        var gone = Client(new FakeVoice { Failure = new VoiceConversionException("cleared away", HttpStatusCode.Gone) });
+        var busy = Client(new FakeVoice { Failure = new VoiceConversionException("the queue is full", HttpStatusCode.ServiceUnavailable, "QUEUE_FULL") });
+        var limited = Client(new FakeVoice { Failure = new VoiceConversionException("rate limit", HttpStatusCode.TooManyRequests) });
+        var taken = Client(new FakeVoice { Failure = new VoiceConversionException("a voice of that name is already there", HttpStatusCode.Conflict, "DUPLICATE_VOICE_LABEL") });
+        var gone = Client(new FakeVoice { Failure = new VoiceConversionException("cleared away", HttpStatusCode.Gone, "RESULT_GONE") });
+        var broken = Client(new FakeVoice { Failure = new VoiceConversionException("something else", HttpStatusCode.InternalServerError) });
 
-        var refused = await busy.GetAsync($"/api/voice/jobs/{JobId}");
-        var conflict = await waited.DeleteAsync("/api/voice/voices/v1");
+        var queue = await busy.GetAsync($"/api/voice/jobs/{JobId}");
+        var rate = await limited.GetAsync($"/api/voice/jobs/{JobId}");
+        var duplicate = await taken.PostAsync("/api/voice/voices", VoiceForm("Marcel"));
         var cleared = await gone.GetAsync($"/api/voice/jobs/{JobId}/result");
+        var failure = await broken.GetAsync($"/api/voice/jobs/{JobId}");
 
-        Assert.Equal(HttpStatusCode.BadGateway, refused.StatusCode);
-        Assert.Contains("the queue is full", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, queue.StatusCode);
+        Assert.Contains("the queue is full", await queue.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.TooManyRequests, rate.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Contains("name is already there", await duplicate.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.Gone, cleared.StatusCode);
+        // Anything the service did not name a status for is this server's problem with it.
+        Assert.Equal(HttpStatusCode.BadGateway, failure.StatusCode);
     }
 
     /// <summary>
