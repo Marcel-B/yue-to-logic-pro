@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using YueToLogic.Api;
@@ -16,7 +17,10 @@ public class StemEndpointTests(WebApplicationFactory<Program> factory) : IClassF
     [Fact]
     public async Task Without_a_stem_service_the_interface_is_told_so()
     {
-        var client = factory.CreateClient();
+        // A developer's user secrets may configure a stem service; this test is about a server without one.
+        var client = factory
+            .WithWebHostBuilder(builder => builder.UseSetting("Stems:BaseUrl", "").UseSetting("Stems:ApiKey", ""))
+            .CreateClient();
 
         var available = await client.GetFromJsonAsync<StemAvailability>("/api/stems");
         var started = await client.PostAsync("/api/stems", Flac());
