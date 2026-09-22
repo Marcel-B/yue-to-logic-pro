@@ -159,6 +159,48 @@ export interface SeparationModel {
   isDefault: boolean
 }
 
+/** What a recording is made of, as the voice service reads it. */
+export interface VoiceAudioProperties {
+  /** The codec, e.g. `pcm_s16le` or `mp3`. */
+  codec: string
+  durationSeconds: number
+  sampleRate: number
+  channels: number
+}
+
+/** A stored reference voice: the collection a conversion chooses its timbre from. */
+export interface ReferenceVoice {
+  /** What a job is started with. */
+  id: string
+  label: string
+  /** ISO 8601. */
+  createdUtc: string | null
+  /** What the service keeps — always mono PCM at 44.1 kHz. */
+  stored: VoiceAudioProperties | null
+  /** The file as it was uploaded; it says whether the recording was good enough. */
+  original: VoiceAudioProperties | null
+}
+
+/** A voice conversion job as the backend reports it. */
+export interface VoiceJob {
+  id: string
+  /** QUEUED, RUNNING, COMPLETED, FAILED or CANCELLED. */
+  status: VoiceJobStatus | string
+  voiceId: string | null
+  /** The reference voice's name when the job was accepted; it may be gone by now. */
+  voiceLabel: string | null
+  /** ISO 8601. */
+  createdUtc: string | null
+  startedUtc: string | null
+  finishedUtc: string | null
+  /** The service's own code for the failure, if the job failed. */
+  errorCode: string | null
+  errorMessage: string | null
+  resultSizeBytes: number | null
+}
+
+export type VoiceJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const
 

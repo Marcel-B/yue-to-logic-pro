@@ -201,6 +201,34 @@ The stems need not travel through the browser: the Logic export takes a field `s
 
 It is configured with `Stems:BaseUrl` and `Stems:ApiKey` (`Stems__BaseUrl` and `Stems__ApiKey` in the container, see [`deploy/.env.example`](deploy/.env.example)). Without either of them the endpoints answer `501` and the interface leaves the section out. With the gateway on the same docker host the address is `http://stemmywav:8080`; this compose project then has to join its network (prepared, commented out, in [`deploy/compose.yml`](deploy/compose.yml)).
 
+## Voice (optional)
+
+A separation that is done can be sung by someone else: the vocal stem goes to ChangeMyVoice, which keeps melody, phrasing and performance and gives them the timbre of a stored voice. That runs on a Mac too and takes minutes, so it goes the same way as a separation — the job is created, the interface asks for its state every five seconds and says so in a window once it is done. There you choose whether the Logic project is downloaded with the new voice right away, whether the result is discarded, or whether you take it later with the usual button. Nothing is downloaded on its own; whoever wants the vocals separately fetches the WAV.
+
+The order is therefore: `audio.flac`, *Create stems*, and once they are there choose a voice under *Change the voice* and start it. The vocals do not travel through the browser — it passes the id of the separation and the id of the voice, and the server fetches the vocal stem from the stem service and hands it on. Where the separation also made dry vocals, those are taken: the model copies what it hears, and a reverb that is sung along with stays in the result.
+
+**The collection of model voices.** A model voice is one recording of a voice, kept by the service under a name — the collection a conversion chooses its timbre from, as the instrument library is what tracks are routed with. The dialog *Model voices* (the microphone in the header, shown only when a voice service is configured) lists what the service has, with the properties of the recording as it was uploaded and as the service keeps it, and adds one from a name and a file (WAV, MP3, FLAC, M4A/AAC or OGG/Opus). The service keeps the first 25 seconds as mono PCM at 44.1 kHz, since that is all the model uses; clean, dry singing without accompaniment gives the best result. A voice that a job is still waiting for cannot be removed, which the service refuses with `409`.
+
+**The jobs.** The second microphone icon opens the voice service's jobs: every job it knows, refreshed every five seconds while the window is open, this browser tab's job marked, and a button per job — *Cancel* for one that is waiting or running, *Remove* for a finished one, whose result is gone afterwards. A job removed there that this tab was waiting for is let go of here as well. Not every ChangeMyVoice offers the route for all of its jobs; one that does not answers `404`, which this server passes on as `501` and the window explains, instead of showing an empty list.
+
+The API key stays on the server here as well: the browser only ever talks to this application, which passes the requests on.
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /api/voice` | – | `{"available":true}` when a voice service is configured |
+| `GET /api/voice/voices` | – | the collection, each voice with `id`, `label`, `createdUtc` and the properties of the `stored` and the `original` recording |
+| `POST /api/voice/voices` | form with `label` and `file` | `201` with the voice; `400` when one of the two is missing |
+| `DELETE /api/voice/voices/{id}` | – | `204`; `409` while a job still waits for the voice |
+| `POST /api/voice/jobs` | form with `voiceId` and `stemJob` (the id of a finished separation) | `202` with the job; `400` without one of the two, `501` without a stem service |
+| `GET /api/voice/jobs/{id}` | – | `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED` or `CANCELLED`, with `voiceLabel`, the timestamps and, on a failure, `errorCode` and `errorMessage` |
+| `GET /api/voice/jobs/{id}/result` | – | the converted recording as a WAV |
+| `DELETE /api/voice/jobs/{id}` | – | cancels a job, or removes a finished one's result; repeatable |
+| `GET /api/voice/jobs` | – | every job the service knows, newest first; `501` from a service that cannot list them |
+
+The converted vocals need not travel through the browser either: the Logic export takes a field `voiceJob` with the job id, and the server fetches the WAV itself and puts it on the project's vocals track — in place of the separated vocals, while the dry ones, where a separation made them, keep their own track. Afterwards it confirms the import, whereupon the service drops the result. The project's audio tracks are prepared for 48 kHz, and ChangeMyVoice works at its model's own rate: a recording of another rate leaves the project with the separated vocals and a warning (`YTL056`), and the result stays at the service so that it can be downloaded and brought in by hand.
+
+It is configured with `Voice:BaseUrl` and `Voice:ApiKey` (`Voice__BaseUrl` and `Voice__ApiKey` in the container, see [`deploy/.env.example`](deploy/.env.example)). Without either of them the endpoints answer `501` and the interface leaves the section, both dialogs and their icons out.
+
 ## Instruments
 
 An instrument is a name for a MIDI output and channel: what the [preview](#preview) routes tracks to and what the exports put them on. Its `kind` is `Synth` (the default) or `DrumMachine`; a drum machine also carries `drums`, the note of each of its drums (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, each 0-127, General MIDI when left out), which the drum tracks that play it are generated on. The library, the assignment of tracks to instruments and the [presets](#presets) are the only state the application keeps, in one SQLite file:

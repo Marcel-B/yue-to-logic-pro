@@ -201,6 +201,34 @@ Die Stems müssen dafür nicht durch den Browser: Beim Logic-Export genügt das 
 
 Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `Stems__BaseUrl` und `Stems__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt den Bereich gar nicht erst an. Läuft der Gateway im selben Docker-Host, ist `http://stemmywav:8080` die Adresse; dafür muss dieses Compose-Projekt dessen Netz beitreten (in [`deploy/compose.yml`](deploy/compose.yml) auskommentiert vorbereitet).
 
+## Stimme ändern (optional)
+
+Eine fertige Trennung kann jemand anderes singen: Der Gesangs-Stem geht an ChangeMyVoice, das Melodie, Phrasierung und Vortrag behält und ihnen das Timbre einer gespeicherten Stimme gibt. Auch das rechnet auf einem Mac und dauert einige Minuten, es läuft also wie eine Trennung – der Auftrag wird angelegt, die Oberfläche fragt alle fünf Sekunden nach dem Stand und meldet sich mit einem Fenster, sobald er fertig ist. Dort wählst du, ob das Logic-Projekt gleich mit der neuen Stimme geladen werden soll, ob das Ergebnis verworfen wird oder ob du später über den gewohnten Knopf lädst. Heruntergeladen wird von selbst nichts; wer den Gesang einzeln haben will, holt sich die WAV.
+
+Die Reihenfolge ist also: `audio.flac`, *Stems erzeugen*, und sobald die da sind unter *Stimme ändern* eine Stimme wählen und starten. Der Gesang geht dabei nicht durch den Browser – der reicht nur die ID der Trennung und die der Stimme weiter, der Server holt den Gesangs-Stem beim Stem-Dienst und gibt ihn weiter. Wo die Trennung auch den trockenen Gesang erzeugt hat, wird dieser genommen: Das Modell ahmt nach, was es hört, und ein mitgesungener Hall bleibt im Ergebnis.
+
+**Die Sammlung der Modellstimmen.** Eine Modellstimme ist eine Aufnahme einer Stimme, vom Dienst unter einem Namen abgelegt – die Sammlung, aus der eine Umwandlung ihr Timbre wählt, so wie die Instrumentenbibliothek das ist, worauf Spuren geroutet werden. Das Fenster *Modellstimmen* (das Mikrofon in der Kopfzeile, nur mit eingerichtetem Voice-Dienst zu sehen) listet, was der Dienst hat, samt den Eigenschaften der Aufnahme, wie sie hochgeladen wurde und wie der Dienst sie behält, und legt aus Name und Datei eine neue an (WAV, MP3, FLAC, M4A/AAC oder OGG/Opus). Der Dienst behält davon die ersten 25 Sekunden als Mono-PCM mit 44,1 kHz, mehr braucht das Modell nicht; sauberer, trockener Gesang ohne Begleitung führt zum besten Ergebnis. Eine Stimme, auf die noch ein Auftrag wartet, lässt sich nicht löschen – der Dienst lehnt das mit `409` ab.
+
+**Die Aufträge.** Das zweite Mikrofon-Symbol öffnet die Aufträge des Voice-Dienstes: alle, die er kennt, alle fünf Sekunden aktualisiert, solange das Fenster offen ist, der Auftrag dieses Browser-Tabs markiert, und je Auftrag ein Knopf – *Abbrechen* für einen wartenden oder laufenden, *Löschen* für einen fertigen, dessen Ergebnis danach weg ist. Wird dort der Auftrag gelöscht, auf den dieser Tab wartet, lässt auch er ihn los. Nicht jedes ChangeMyVoice kennt die Route für alle seine Aufträge; eines ohne sie antwortet mit `404`, was dieser Server als `501` weiterreicht und das Fenster erklärt, statt eine leere Liste zu zeigen.
+
+Der API-Schlüssel bleibt auch hier im Server: Der Browser spricht nur mit dieser Anwendung, die die Anfragen weiterreicht.
+
+| Endpunkt | Anfrage | Antwort |
+|---|---|---|
+| `GET /api/voice` | – | `{"available":true}`, wenn ein Voice-Dienst eingerichtet ist |
+| `GET /api/voice/voices` | – | die Sammlung, je Stimme `id`, `label`, `createdUtc` und die Eigenschaften der abgelegten (`stored`) und der hochgeladenen Aufnahme (`original`) |
+| `POST /api/voice/voices` | Formular mit `label` und `file` | `201` mit der Stimme; `400`, wenn eines von beiden fehlt |
+| `DELETE /api/voice/voices/{id}` | – | `204`; `409`, solange noch ein Auftrag auf die Stimme wartet |
+| `POST /api/voice/jobs` | Formular mit `voiceId` und `stemJob` (die ID einer fertigen Trennung) | `202` mit dem Auftrag; `400` ohne eines von beiden, `501` ohne Stem-Dienst |
+| `GET /api/voice/jobs/{id}` | – | `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED` oder `CANCELLED` samt `voiceLabel`, den Zeitpunkten und, im Fehlerfall, `errorCode` und `errorMessage` |
+| `GET /api/voice/jobs/{id}/result` | – | die umgewandelte Aufnahme als WAV |
+| `DELETE /api/voice/jobs/{id}` | – | bricht einen Auftrag ab oder löscht das Ergebnis eines fertigen; wiederholbar |
+| `GET /api/voice/jobs` | – | alle Aufträge, die der Dienst kennt, jüngste zuerst; `501` von einem Dienst, der sie nicht auflisten kann |
+
+Auch der geänderte Gesang muss nicht durch den Browser: Beim Logic-Export genügt das Feld `voiceJob` mit der Auftrags-ID, dann holt der Server die WAV selbst und legt sie auf die Vocals-Spur des Projekts – anstelle des getrennten Gesangs, während der trockene, wo eine Trennung ihn erzeugt hat, seine eigene Spur behält. Danach bestätigt er den Import, womit der Dienst das Ergebnis löscht. Die Audiospuren des Projekts sind auf 48 kHz vorbereitet, ChangeMyVoice rechnet mit der Rate seines Modells: Eine Aufnahme mit einer anderen Rate lässt das Projekt beim getrennten Gesang und meldet eine Warnung (`YTL056`); das Ergebnis bleibt beim Dienst, lässt sich also laden und von Hand einsetzen.
+
+Eingerichtet wird das über `Voice:BaseUrl` und `Voice:ApiKey` (im Container `Voice__BaseUrl` und `Voice__ApiKey`, siehe [`deploy/.env.example`](deploy/.env.example)). Fehlt eines von beiden, antworten die Endpunkte mit `501` und die Oberfläche zeigt weder den Bereich noch die beiden Fenster und ihre Symbole.
+
 ## Instrumente
 
 Ein Instrument ist ein Name für einen MIDI-Ausgang und Kanal: Dorthin routet die [Vorschau](#vorschau) die Spuren, und darauf legen die Exporte sie. Seine Art (`kind`) ist `Synth` (Standard) oder `DrumMachine`; ein Drumcomputer trägt zusätzlich `drums`, die Note jeder seiner Trommeln (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, jeweils 0–127, General MIDI, wenn sie fehlen), auf denen die Schlagzeugspuren erzeugt werden, die ihn spielen. Die Liste, die Zuordnung der Spuren und die [Voreinstellungen](#voreinstellungen) sind der einzige Zustand, den die Anwendung hält, in einer SQLite-Datei:
