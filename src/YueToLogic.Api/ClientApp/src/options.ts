@@ -120,7 +120,8 @@ export function toConversionOptions(form: FormState, audioLength: number | null 
       drums:
         form.drums === 'off'
           ? null
-          : { pattern: form.drums, crashOnSections: form.crash, separateTracks: form.splitDrums },
+          : // The notes come from the drum machine a track is assigned to, which the app adds afterwards.
+            { pattern: form.drums, crashOnSections: form.crash, separateTracks: form.splitDrums, notes: null },
       chords:
         !form.includeChords || plainChords
           ? null

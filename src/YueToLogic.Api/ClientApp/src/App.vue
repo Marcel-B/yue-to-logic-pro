@@ -18,7 +18,7 @@ import FileDropZone from './components/FileDropZone.vue'
 import StemPanel from './components/StemPanel.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
-import { instrumentsForExport, withInstrumentChannels } from './instruments'
+import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
 import { midiUsable } from './player'
 import { deletePreset, loadPresets, savePreset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
@@ -239,9 +239,10 @@ function reset(): void {
   logicWarnings.value = []
 }
 
-/** The form's options with every assigned track on its instrument's channel. */
+/** The form's options with every assigned track on its instrument's channel, and the drums on a drum machine's notes. */
 function conversionOptions() {
-  return withInstrumentChannels(toConversionOptions(form.value, audioLength.value), appliedAssignments.value, instruments.value)
+  const options = withInstrumentChannels(toConversionOptions(form.value, audioLength.value), appliedAssignments.value, instruments.value)
+  return withDrumNotes(options, appliedAssignments.value, instruments.value)
 }
 
 async function convert(): Promise<void> {

@@ -54,6 +54,22 @@ public class ConvertEndpointTests(WebApplicationFactory<Program> factory) : ICla
     }
 
     [Fact]
+    public async Task Drum_notes_in_the_options_put_the_split_kit_on_a_drum_machine()
+    {
+        const string options = """{"arrangement":{"drums":{"separateTracks":true,"notes":{"kick":36,"snare":37,"closedHiHat":44,"openHiHat":45,"crash":51,"clap":39}},"countIn":{"bars":1}}}""";
+
+        var response = await _client.PostAsync("/api/convert", Form(SampleScore, options));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var score = (await ReadResultAsync(response)).Score!;
+        // The count-in click lands on the first drum track, as the machine's clap.
+        Assert.Equal([36, 39], score.Voices.Single(v => v.Id == "Kick").Notes.Select(n => n.NoteNumber).Distinct().Order());
+        Assert.Equal([37], score.Voices.Single(v => v.Id == "Snare").Notes.Select(n => n.NoteNumber).Distinct());
+        Assert.Equal([44], score.Voices.Single(v => v.Id == "HiHat").Notes.Select(n => n.NoteNumber).Distinct());
+        Assert.Equal([51], score.Voices.Single(v => v.Id == "Crash").Notes.Select(n => n.NoteNumber).Distinct());
+    }
+
+    [Fact]
     public async Task Chord_pattern_adds_a_played_out_chord_track()
     {
         var response = await _client.PostAsync("/api/convert", Form(SampleScore, """{"arrangement":{"chords":{"pattern":"offbeat"}}}"""));

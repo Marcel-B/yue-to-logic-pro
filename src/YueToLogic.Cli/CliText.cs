@@ -18,6 +18,7 @@ internal sealed class CliText
     public required string InvalidOctave { get; init; }
     public required string InvalidBassPattern { get; init; }
     public required string InvalidDrumPattern { get; init; }
+    public required string InvalidDrumNote { get; init; }
     public required string InvalidChordPattern { get; init; }
     public required string InvalidAssignment { get; init; }
     public required string InvalidChordVoicing { get; init; }
@@ -92,6 +93,9 @@ internal sealed class CliText
                                       open hi-hat on 4+), half-time, disco, sixteenth-hats, shuffle;
                                       implies --drums
                   --split-drums       One track per drum: Kick, Snare, HiHat, Crash; implies --drums
+                  --drum-note <d>=<n> Note a drum machine plays drum d on: kick, snare, closed-hihat,
+                                      open-hihat, crash, clap; n a number (36) or a name as Logic shows it
+                                      (C1); repeatable, the rest stay General MIDI; implies --drums
                   --chord-pattern <p> How the chords are played: block (default, as written), eighths,
                                       sixteenths, offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Inversion of the chords: root (default), closest (smooth voice leading),
@@ -139,6 +143,7 @@ internal sealed class CliText
         InvalidOctave = "Invalid {0} value '{1}'; expected a whole number between -{2} and {2}.",
         InvalidBassPattern = "Unknown bass pattern '{0}'; expected one of: {1}.",
         InvalidDrumPattern = "Unknown drum pattern '{0}'; expected one of: {1}.",
+        InvalidDrumNote = "--drum-note expects <drum>=<note> with a drum of {1} and a note from 0 to 127 or a name such as C1, got '{0}'.",
         InvalidChordPattern = "Unknown chord pattern '{0}'; expected one of: {1}.",
         InvalidAssignment = "{0} expects <track>=<number> with a number from 1 to {2}, got '{1}'.",
         InvalidChordVoicing = "Unknown chord voicing '{0}'; expected one of: {1}.",
@@ -201,6 +206,10 @@ internal sealed class CliText
                                       offene Hi-Hat auf 4+), half-time, disco, sixteenth-hats, shuffle;
                                       schließt --drums ein
                   --split-drums       Eine Spur je Trommel: Kick, Snare, HiHat, Crash; schließt --drums ein
+                  --drum-note <t>=<n> Note, auf der ein Drumcomputer die Trommel t spielt: kick, snare,
+                                      closed-hihat, open-hihat, crash, clap; n als Zahl (36) oder Name wie in
+                                      Logic (C1); mehrfach möglich, der Rest bleibt General MIDI; schließt
+                                      --drums ein
                   --chord-pattern <p> Akkordbegleitung: block (Standard, wie notiert), eighths, sixteenths,
                                       offbeat, arpeggio, arpeggio-up-down
                   --chord-voicing <v> Akkordlage: root (Standard), closest (weiche Stimmführung), first, second
@@ -247,6 +256,7 @@ internal sealed class CliText
         InvalidOctave = "Ungültiger Wert für {0}: '{1}'; erwartet wird eine ganze Zahl zwischen -{2} und {2}.",
         InvalidBassPattern = "Unbekanntes Bassmuster '{0}'; erlaubt sind: {1}.",
         InvalidDrumPattern = "Unbekanntes Schlagzeugmuster '{0}'; erlaubt sind: {1}.",
+        InvalidDrumNote = "--drum-note erwartet <Trommel>=<Note> mit einer Trommel aus {1} und einer Note von 0 bis 127 oder einem Namen wie C1, bekam '{0}'.",
         InvalidChordPattern = "Unbekanntes Akkordmuster '{0}'; erlaubt sind: {1}.",
         InvalidAssignment = "{0} erwartet <Spur>=<Zahl> mit einer Zahl von 1 bis {2}, bekam '{1}'.",
         InvalidChordVoicing = "Unbekannte Akkordlage '{0}'; erlaubt sind: {1}.",

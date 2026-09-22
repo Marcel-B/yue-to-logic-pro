@@ -96,7 +96,7 @@ export interface ConversionOptions {
     defaultOctaveShift: number
     octaveShifts: Record<string, number>
     bass: { pattern: BassPattern; octaveShift: number } | null
-    drums: { pattern: DrumPattern; crashOnSections: boolean; separateTracks: boolean } | null
+    drums: { pattern: DrumPattern; crashOnSections: boolean; separateTracks: boolean; notes: DrumNotes | null } | null
     chords: { pattern: ChordPattern; inversion: ChordInversion; octaveShift: number } | null
     guideTones: { octaveShift: number } | null
     doubling: { voiceId: string; semitones: number } | null
@@ -130,18 +130,45 @@ export interface StemJob {
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const
 
+/** The note each drum of the generated kit is played on; General MIDI unless a drum machine says otherwise. */
+export interface DrumNotes {
+  kick: number
+  snare: number
+  closedHiHat: number
+  openHiHat: number
+  crash: number
+  clap: number
+}
+
+/** The General MIDI drum map, what the generator plays without a drum machine. */
+export const GENERAL_MIDI_DRUMS: DrumNotes = { kick: 36, snare: 38, closedHiHat: 42, openHiHat: 46, crash: 49, clap: 39 }
+
+/** The drums of the kit in the order the interface lists them. */
+export const DRUMS = ['kick', 'snare', 'closedHiHat', 'openHiHat', 'crash', 'clap'] as const satisfies readonly (keyof DrumNotes)[]
+
+/**
+ * A synthesizer plays a track on its port and channel; a drum machine plays several drums on one channel,
+ * each on a note of its own, which the drum tracks that play it are generated on.
+ */
+export type InstrumentKind = 'Synth' | 'DrumMachine'
+
 /** A hardware instrument as the server keeps it: a name for a MIDI port (as Web MIDI names it) and a channel, 1-16. */
 export interface Instrument {
   id: number
   name: string
   port: string
   channel: number
+  kind: InstrumentKind
+  /** Only a drum machine has them. */
+  drums: DrumNotes | null
 }
 
 export interface InstrumentInput {
   name: string
   port: string
   channel: number
+  kind: InstrumentKind
+  drums: DrumNotes | null
 }
 
 /** Track name → id of the instrument that plays it. */

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using YueToLogic.Api.Instruments;
+using YueToLogic.Core.Arrangement;
 
 namespace YueToLogic.Api.Tests;
 
@@ -43,6 +44,112 @@ public class InstrumentEndpointTests : IDisposable
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         Assert.Empty((await _client.GetFromJsonAsync<Instrument[]>("/api/instruments"))!);
         Assert.Equal(HttpStatusCode.NotFound, (await _client.DeleteAsync($"/api/instruments/{instrument.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_drum_machine_keeps_the_notes_of_its_drums()
+    {
+        var created = await _client.PostAsJsonAsync("/api/instruments", new
+        {
+            name = "DrumBrute Impact",
+            port = "MIDI4x4 Midi Out 2",
+            channel = 8,
+            kind = "DrumMachine",
+            drums = new { kick = 36, snare = 37, closedHiHat = 44, openHiHat = 45, crash = 51, clap = 39 },
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var expected = new Instrument(0, "DrumBrute Impact", "MIDI4x4 Midi Out 2", 8, InstrumentKind.DrumMachine,
+            new DrumNotes { Kick = 36, Snare = 37, ClosedHiHat = 44, OpenHiHat = 45, Crash = 51, Clap = 39 });
+        var instrument = (await created.Content.ReadFromJsonAsync<Instrument>())!;
+        Assert.Equal(expected with { Id = instrument.Id }, instrument);
+        Assert.Contains("\"kind\":\"DrumMachine\"", await created.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        // The list and a restart give the same back.
+        Assert.Equal([instrument], (await _client.GetFromJsonAsync<Instrument[]>("/api/instruments"))!);
+        using var restarted = new InstrumentApp(_app.DataPath);
+        using var client = restarted.CreateClient();
+        Assert.Equal([instrument], (await client.GetFromJsonAsync<Instrument[]>("/api/instruments"))!);
+    }
+
+    [Fact]
+    public async Task A_drum_machine_without_notes_gets_general_midi_and_a_synthesizer_has_none()
+    {
+        var machine = await _client.PostAsJsonAsync("/api/instruments", new { name = "TR-8", port = "MIDI4x4 Midi Out 3", channel = 10, kind = "DrumMachine" });
+        var synth = await _client.PostAsJsonAsync("/api/instruments", new { name = "Mother32", port = "MIDI4x4 Midi Out 1", channel = 12, drums = new { kick = 50 } });
+
+        var tr8 = (await machine.Content.ReadFromJsonAsync<Instrument>())!;
+        var mother = (await synth.Content.ReadFromJsonAsync<Instrument>())!;
+        Assert.Equal(new DrumNotes(), tr8.Drums);
+        Assert.Equal(InstrumentKind.Synth, mother.Kind);
+        Assert.Null(mother.Drums);
+
+        // Turning the synthesizer into a drum machine and back drops the notes again.
+        var changed = await _client.PutAsJsonAsync($"/api/instruments/{mother.Id}", new { name = "Mother32", port = "MIDI4x4 Midi Out 1", channel = 12, kind = "DrumMachine", drums = new { kick = 50 } });
+        Assert.Equal(50, (await changed.Content.ReadFromJsonAsync<Instrument>())!.Drums!.Kick);
+        var back = await _client.PutAsJsonAsync($"/api/instruments/{mother.Id}", new { name = "Mother32", port = "MIDI4x4 Midi Out 1", channel = 12, kind = "Synth" });
+        Assert.Null((await back.Content.ReadFromJsonAsync<Instrument>())!.Drums);
+    }
+
+    [Theory]
+    [InlineData("DrumMachine", 128, "drums.kick")]
+    [InlineData("DrumMachine", -1, "drums.kick")]
+    [InlineData("Piano", 36, "kind")]
+    public async Task A_drum_note_off_the_keyboard_or_an_unknown_kind_is_refused(string kind, int kick, string field)
+    {
+        var response = await _client.PostAsJsonAsync("/api/instruments", new { name = "X", port = "MIDI4x4 Midi Out 2", channel = 8, kind, drums = new { kick } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(field, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Empty((await _client.GetFromJsonAsync<Instrument[]>("/api/instruments"))!);
+    }
+
+    [Fact]
+    public async Task A_library_from_the_first_release_is_upgraded_in_place()
+    {
+        // The schema of version 1, as SqliteInstrumentStore created it before instruments had a kind.
+        var path = Path.Combine(Path.GetTempPath(), $"yue-to-logic-tests-{Guid.NewGuid():N}", "instruments.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path }.ToString()))
+        {
+            connection.Open();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE instruments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    port TEXT NOT NULL,
+                    channel INTEGER NOT NULL CHECK (channel BETWEEN 1 AND 16),
+                    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                );
+                CREATE TABLE track_assignments (
+                    track TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
+                    instrument_id INTEGER NOT NULL REFERENCES instruments (id) ON DELETE CASCADE
+                );
+                INSERT INTO instruments (name, port, channel) VALUES ('Mother32', 'MIDI4x4 Midi Out 1', 12);
+                INSERT INTO track_assignments (track, instrument_id) VALUES ('Bass', 1);
+                PRAGMA user_version = 1;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        try
+        {
+            using var app = new InstrumentApp(path);
+            using var client = app.CreateClient();
+
+            Assert.Equal([new Instrument(1, "Mother32", "MIDI4x4 Midi Out 1", 12)], (await client.GetFromJsonAsync<Instrument[]>("/api/instruments"))!);
+            Assert.Equal(new Dictionary<string, long> { ["Bass"] = 1 }, await client.GetFromJsonAsync<Dictionary<string, long>>("/api/instruments/assignments"));
+            var machine = await client.PostAsJsonAsync("/api/instruments", new { name = "DrumBrute", port = "MIDI4x4 Midi Out 2", channel = 8, kind = "DrumMachine", drums = new { snare = 37 } });
+            Assert.Equal(HttpStatusCode.Created, machine.StatusCode);
+            Assert.Equal(37, (await machine.Content.ReadFromJsonAsync<Instrument>())!.Drums!.Snare);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
     }
 
     [Fact]
