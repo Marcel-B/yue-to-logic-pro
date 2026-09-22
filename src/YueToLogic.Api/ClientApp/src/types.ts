@@ -201,6 +201,17 @@ export interface VoiceJob {
 
 export type VoiceJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
 
+/**
+ * One page of the voice service's jobs. It keeps a record of every job it ever had, so the list only grows
+ * and is read page by page; `total` counts every job the filter matches, not the ones on this page.
+ */
+export interface VoiceJobPage {
+  jobs: VoiceJob[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const
 

@@ -53,7 +53,7 @@ public static class VoiceEndpoints
 
         voice.MapGet("/jobs", ListJobsAsync)
             .WithName("VoiceJobs")
-            .WithSummary("Every job the voice service knows, newest first; 501 from a service that cannot list them.");
+            .WithSummary("A page of the voice service's jobs, newest first, narrowed by 'status' and paged with 'limit' and 'offset'; 501 from a service that cannot list them.");
 
         voice.MapGet("/jobs/{id}", GetJobAsync)
             .WithName("VoiceJobStatus")
@@ -219,10 +219,16 @@ public static class VoiceEndpoints
     }
 
     /// <summary>
-    /// Every job of the service. Not every ChangeMyVoice offers this route yet; its 404 is not a job that is
-    /// gone but a service that cannot answer, which the interface says instead of showing an empty list.
+    /// A page of the service's jobs. It keeps a record of every job it ever had, so the list only grows and
+    /// the query is passed on as it came. Not every ChangeMyVoice offers this route; its 404 is not a job that
+    /// is gone but a service that cannot answer, which the interface says instead of showing an empty list.
     /// </summary>
-    private static async Task<IResult> ListJobsAsync(IServiceProvider services, CancellationToken cancellationToken)
+    private static async Task<IResult> ListJobsAsync(
+        [FromQuery] string? status,
+        [FromQuery] int? limit,
+        [FromQuery] int? offset,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
     {
         if (Service(services) is not { } service)
         {
@@ -231,8 +237,8 @@ public static class VoiceEndpoints
 
         try
         {
-            var jobs = await service.ListJobsAsync(cancellationToken).ConfigureAwait(false);
-            return Results.Json(jobs.ToArray(), YueToLogicJsonContext.Default.VoiceJobArray);
+            var page = await service.ListJobsAsync(status, limit, offset, cancellationToken).ConfigureAwait(false);
+            return Results.Json(page, YueToLogicJsonContext.Default.VoiceJobPage);
         }
         catch (VoiceConversionException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {

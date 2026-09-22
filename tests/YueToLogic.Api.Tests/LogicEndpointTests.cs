@@ -292,8 +292,12 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
         public Task<VoiceJob> GetJobAsync(string jobId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new VoiceJob(jobId, VoiceJobStatus.Completed));
 
-        public Task<IReadOnlyList<VoiceJob>> ListJobsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<VoiceJob>>([]);
+        public Task<VoiceJobPage> ListJobsAsync(
+            string? status = null,
+            int? limit = null,
+            int? offset = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new VoiceJobPage([], 0, 0, 0));
 
         public Task<Stream> DownloadResultAsync(string jobId, CancellationToken cancellationToken = default) =>
             Task.FromResult<Stream>(new MemoryStream(Result));

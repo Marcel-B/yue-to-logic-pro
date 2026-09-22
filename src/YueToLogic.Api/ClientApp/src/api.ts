@@ -10,6 +10,7 @@ import type {
   SeparationModel,
   StemJob,
   VoiceJob,
+  VoiceJobPage,
 } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? ''
@@ -238,11 +239,22 @@ export async function downloadVoiceResult(id: string): Promise<Blob> {
 }
 
 /**
- * Every job the voice service knows, newest first. A service without that route answers 501, which the
+ * A page of the voice service's jobs, newest first. A service without that route answers 501, which the
  * interface shows as "this one cannot list its jobs" rather than as an empty list.
+ *
+ * @param status Only jobs in that state, or an empty string for all of them.
  */
-export async function listVoiceJobs(signal?: AbortSignal): Promise<VoiceJob[]> {
-  return (await request('/api/voice/jobs', { signal })).json() as Promise<VoiceJob[]>
+export async function listVoiceJobs(
+  limit: number,
+  offset: number,
+  status = '',
+  signal?: AbortSignal,
+): Promise<VoiceJobPage> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (status) {
+    query.set('status', status)
+  }
+  return (await request(`/api/voice/jobs?${query}`, { signal })).json() as Promise<VoiceJobPage>
 }
 
 /** Cancels a job or drops a finished one's result. Failure is not worth reporting when nobody asked. */

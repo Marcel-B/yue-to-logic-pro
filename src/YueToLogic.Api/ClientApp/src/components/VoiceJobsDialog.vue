@@ -5,9 +5,12 @@ import { formatDateTime, locale, t } from '../i18n'
 import type { VoiceJob } from '../types'
 
 /**
- * The voice service's own view: every job it knows, and a way to get rid of one. ChangeMyVoice has no
+ * The voice service's own view: the jobs it knows, and a way to get rid of one. ChangeMyVoice has no
  * interface of its own, so this is where a job that was started and forgotten is found and removed, and where
  * a failed one says why. A service that cannot list its jobs is not an error - the hint then says so.
+ *
+ * The service keeps a record of every job it ever had, so the list only grows: it is read page by page, and
+ * a state can be picked to look for what is waiting or what failed.
  */
 const props = defineProps<{
   /** The job this session started or holds, so that it is marked and not removed by mistake. */
@@ -20,8 +23,20 @@ const emit = defineEmits<{ deleted: [id: string] }>()
 /** The list is refreshed on its own while the dialog is open; the state changes by the minute, not the second. */
 const refreshMilliseconds = 5000
 
+/** How many jobs a page holds; enough to see what is going on without scrolling the dialog away. */
+const pageSize = 25
+
+/** The states the service knows, in the order the filter offers them. */
+const states = ['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'] as const
+
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 const jobs = ref<VoiceJob[]>([])
+/** How many jobs match the chosen state altogether, which is what the paging is measured against. */
+const total = ref(0)
+/** How many jobs the shown page skips. */
+const offset = ref(0)
+/** The state the list is narrowed to, or an empty string for all of them. */
+const filter = ref('')
 const loading = ref(false)
 /** When the list was last fetched, so that a stale one can be told from a fresh one. */
 const refreshedAt = ref<Date | null>(null)
@@ -37,11 +52,36 @@ const refreshedText = computed(() =>
   refreshedAt.value ? t('voiceJobsRefreshed', { time: refreshedAt.value.toLocaleTimeString(locale.value) }) : '',
 )
 
+/** "26–50 of 137", so it is clear that the page is a section and how large the rest is. */
+const rangeText = computed(() =>
+  total.value === 0
+    ? ''
+    : t('voiceJobsRange', { from: offset.value + 1, to: Math.min(offset.value + jobs.value.length, total.value), total: total.value }),
+)
+
+const hasPrevious = computed(() => offset.value > 0)
+const hasNext = computed(() => offset.value + jobs.value.length < total.value)
+
 onUnmounted(() => stop())
 
 async function open(): Promise<void> {
   error.value = null
+  offset.value = 0
   dialog.value?.showModal()
+  await refresh()
+  schedule()
+}
+
+/** A state was picked: the paging starts over, since the page a job sat on says nothing about the next filter. */
+async function narrow(): Promise<void> {
+  offset.value = 0
+  await refresh()
+  schedule()
+}
+
+/** One page forward or back; the service is asked again, since it has moved on meanwhile. */
+async function turn(by: number): Promise<void> {
+  offset.value = Math.max(0, offset.value + by * pageSize)
   await refresh()
   schedule()
 }
@@ -78,7 +118,9 @@ async function refresh(): Promise<void> {
   pending = controller
   loading.value = true
   try {
-    jobs.value = await listVoiceJobs(controller.signal)
+    const result = await listVoiceJobs(pageSize, offset.value, filter.value, controller.signal)
+    jobs.value = result.jobs
+    total.value = result.total
     refreshedAt.value = new Date()
     error.value = null
     unsupported.value = false
@@ -115,6 +157,11 @@ async function remove(job: VoiceJob): Promise<void> {
   } finally {
     removing.value = null
   }
+
+  // The only job of a page is gone: the page before it is now the last one, so it is shown instead of nothing.
+  if (jobs.value.length === 1 && offset.value > 0) {
+    offset.value -= pageSize
+  }
   await refresh()
 }
 
@@ -122,8 +169,9 @@ function status(job: VoiceJob): string {
   return job.status.toUpperCase()
 }
 
-function statusText(job: VoiceJob): string {
-  switch (status(job)) {
+/** What a state is called, for a job's row and for the filter alike. */
+function statusText(state: string): string {
+  switch (state.toUpperCase()) {
     case 'QUEUED':
       return t('voiceJobsStatusQueued')
     case 'RUNNING':
@@ -135,7 +183,7 @@ function statusText(job: VoiceJob): string {
     case 'CANCELLED':
       return t('voiceJobsStatusCancelled')
     default:
-      return job.status
+      return state
   }
 }
 
@@ -170,6 +218,13 @@ defineExpose({ open })
     <div class="head">
       <h3>{{ t('voiceJobsTitle') }}</h3>
       <div v-if="!unsupported" class="refresh">
+        <label class="filter">
+          <span class="sr-only">{{ t('voiceJobsFilter') }}</span>
+          <select v-model="filter" @change="narrow">
+            <option value="">{{ t('voiceJobsFilterAll') }}</option>
+            <option v-for="state in states" :key="state" :value="state">{{ statusText(state) }}</option>
+          </select>
+        </label>
         <span class="muted">{{ loading ? t('voiceJobsLoading') : refreshedText }}</span>
         <button type="button" class="button secondary small" :disabled="loading" @click="refresh">{{ t('voiceJobsRefresh') }}</button>
       </div>
@@ -198,7 +253,7 @@ defineExpose({ open })
             <span v-if="job.errorMessage" class="error">{{ job.errorMessage }}</span>
           </td>
           <td class="voice">{{ job.voiceLabel ?? job.voiceId ?? '–' }}</td>
-          <td><span class="status" :class="status(job).toLowerCase()">{{ statusText(job) }}</span></td>
+          <td><span class="status" :class="status(job).toLowerCase()">{{ statusText(job.status) }}</span></td>
           <td class="time">{{ when(job.createdUtc) }}</td>
           <td class="time">{{ when(job.finishedUtc) }}</td>
           <td class="actions">
@@ -214,6 +269,15 @@ defineExpose({ open })
     </p>
 
     <div class="choices">
+      <div v-if="!unsupported && total > 0" class="paging">
+        <span class="muted">{{ rangeText }}</span>
+        <button type="button" class="button secondary small" :disabled="!hasPrevious || loading" @click="turn(-1)">
+          {{ t('voiceJobsPrevious') }}
+        </button>
+        <button type="button" class="button secondary small" :disabled="!hasNext || loading" @click="turn(1)">
+          {{ t('voiceJobsNext') }}
+        </button>
+      </div>
       <button type="button" class="button secondary" @click="close">{{ t('voiceJobsClose') }}</button>
     </div>
   </dialog>
@@ -360,7 +424,22 @@ code {
 
 .choices {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.paging {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.filter select {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
 }
 
 @media (max-width: 40rem) {

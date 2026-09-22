@@ -116,8 +116,12 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
         Assert.Equal(JobId, voice.DeletedJob);
     }
 
+    /// <summary>
+    /// The service keeps a record of every job it ever had, so the list is paged. What the interface asks for
+    /// is handed on as it came, and the page is passed back with the total the paging is measured against.
+    /// </summary>
     [Fact]
-    public async Task The_jobs_of_the_service_are_listed_as_it_reports_them()
+    public async Task A_page_of_jobs_is_passed_on_with_what_was_asked_for()
     {
         var created = new DateTimeOffset(2026, 9, 22, 8, 0, 0, TimeSpan.Zero);
         var voice = new FakeVoice
@@ -127,11 +131,24 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
                 new VoiceJob(JobId, VoiceJobStatus.Running, "v1", "Marcel", created, created.AddMinutes(1)),
                 new VoiceJob("job-0815", VoiceJobStatus.Failed, "v1", "Marcel", created.AddHours(-1), null, created, "MODEL_ERROR", "the Mac said no"),
             ],
+            Total = 137,
         };
 
-        var jobs = await Client(voice).GetFromJsonAsync<VoiceJob[]>("/api/voice/jobs");
+        var page = await Client(voice).GetFromJsonAsync<VoiceJobPage>("/api/voice/jobs?status=FAILED&limit=25&offset=50");
 
-        Assert.Equal(voice.Jobs, jobs);
+        Assert.Equal(voice.Jobs, page!.Jobs);
+        Assert.Equal((137, 25, 50), (page.Total, page.Limit, page.Offset));
+        Assert.Equal((VoiceJobStatus.Failed, 25, 50), (voice.Status, voice.Limit, voice.Offset));
+    }
+
+    [Fact]
+    public async Task Without_a_query_the_service_pages_the_way_it_wants_to()
+    {
+        var voice = new FakeVoice();
+
+        await Client(voice).GetFromJsonAsync<VoiceJobPage>("/api/voice/jobs");
+
+        Assert.Equal((null, null, null), (voice.Status, voice.Limit, voice.Offset));
     }
 
     /// <summary>
@@ -215,6 +232,16 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
 
         public VoiceJob[] Jobs { get; init; } = [];
 
+        /// <summary>How many jobs the service would have altogether, whatever this page holds.</summary>
+        public int Total { get; init; }
+
+        /// <summary>What the endpoint passed on of the query, so that nothing is invented on the way.</summary>
+        public string? Status { get; private set; }
+
+        public int? Limit { get; private set; }
+
+        public int? Offset { get; private set; }
+
         /// <summary>What the endpoint passed on, so that what reaches the service can be checked.</summary>
         public string? Label { get; private set; }
 
@@ -266,8 +293,19 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
         public Task<VoiceJob> GetJobAsync(string jobId, CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult(new VoiceJob(jobId, VoiceJobStatus.Completed)) : throw Failure;
 
-        public Task<IReadOnlyList<VoiceJob>> ListJobsAsync(CancellationToken cancellationToken = default) =>
-            Failure is null ? Task.FromResult<IReadOnlyList<VoiceJob>>(Jobs) : throw Failure;
+        public Task<VoiceJobPage> ListJobsAsync(
+            string? status = null,
+            int? limit = null,
+            int? offset = null,
+            CancellationToken cancellationToken = default)
+        {
+            Status = status;
+            Limit = limit;
+            Offset = offset;
+            return Failure is null
+                ? Task.FromResult(new VoiceJobPage(Jobs, Total, limit ?? 0, offset ?? 0))
+                : throw Failure;
+        }
 
         public Task<Stream> DownloadResultAsync(string jobId, CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult<Stream>(new MemoryStream(Encoding.UTF8.GetBytes("RIFFresult"))) : throw Failure;
