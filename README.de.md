@@ -85,7 +85,7 @@ Im Vue-Frontend zieht man eine `score.abc` hinein (oder wählt sie über den Dat
 
 Statt zweier einzelner Dateien lässt sich auch der **ganze Ausgabeordner eines YuE-Laufs** ablegen oder über *Ordner auswählen* öffnen: Darin werden `score.abc` und `audio.flac` gesucht, auch eine Ebene tiefer in `song1`, `song2` und so weiter. Enthält der Ordner mehrere Songs, wird der erste genommen und die Zahl der übrigen gemeldet.
 
-**Voreinstellungen** über der Parameterliste sichern den ganzen Satz unter einem Namen und holen ihn wieder – für die Kombination aus Mustern, Oktavlagen, Groove und MIDI-Kanälen, mit der du üblicherweise arbeitest. Sie liegen im Browser und überstehen *Zurücksetzen*, das nur das Formular leert.
+**Voreinstellungen** über der Parameterliste sichern den ganzen Satz unter einem Namen und holen ihn wieder – für die Kombination aus Mustern, Oktavlagen, Groove und MIDI-Kanälen, mit der du üblicherweise arbeitest. Sie liegen wie die [Instrumente](#instrumente) auf dem Server, jeder Browser bietet also dieselben an, und sie überstehen *Zurücksetzen*, das nur das Formular leert. Voreinstellungen, die ein Browser vor dem Umzug auf den Server gesichert hat, reicht er beim ersten Blick auf einen leeren Server hinüber.
 
 ### Vorschau
 
@@ -200,7 +200,7 @@ Eingerichtet wird das über `Stems:BaseUrl` und `Stems:ApiKey` (im Container `St
 
 ## Instrumente
 
-Ein Instrument ist ein Name für einen MIDI-Ausgang und Kanal: Dorthin routet die [Vorschau](#vorschau) die Spuren, und darauf legen die Exporte sie. Seine Art (`kind`) ist `Synth` (Standard) oder `DrumMachine`; ein Drumcomputer trägt zusätzlich `drums`, die Note jeder seiner Trommeln (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, jeweils 0–127, General MIDI, wenn sie fehlen), auf denen die Schlagzeugspuren erzeugt werden, die ihn spielen. Die Liste und die Zuordnung der Spuren sind der einzige Zustand, den die Anwendung hält, in einer SQLite-Datei:
+Ein Instrument ist ein Name für einen MIDI-Ausgang und Kanal: Dorthin routet die [Vorschau](#vorschau) die Spuren, und darauf legen die Exporte sie. Seine Art (`kind`) ist `Synth` (Standard) oder `DrumMachine`; ein Drumcomputer trägt zusätzlich `drums`, die Note jeder seiner Trommeln (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, jeweils 0–127, General MIDI, wenn sie fehlen), auf denen die Schlagzeugspuren erzeugt werden, die ihn spielen. Die Liste, die Zuordnung der Spuren und die [Voreinstellungen](#voreinstellungen) sind der einzige Zustand, den die Anwendung hält, in einer SQLite-Datei:
 
 | Endpunkt | Anfrage | Antwort |
 |---|---|---|
@@ -212,6 +212,16 @@ Ein Instrument ist ein Name für einen MIDI-Ausgang und Kanal: Dorthin routet di
 | `PUT /api/instruments/assignments/{track}` | `{ "instrumentId": 1 }` oder `null` zum Entfernen | `204`; `404` bei unbekanntem Instrument |
 
 Der Port ist der Name, den Web MIDI im Browser meldet – auf dem Mac der CoreMIDI-Anzeigename, Gerät und Port zusammen („MIDI4x4 Midi Out 1“) oder nur der eine Name, wenn beide gleich sind („Scarlett 8i6 USB“).
+
+## Voreinstellungen
+
+Eine Voreinstellung ist das Webformular unter einem Namen: Der Server bewahrt das Formular als das JSON auf, das die Oberfläche geschickt hat, und gibt es ungelesen zurück; eine neue Option im Formular braucht auf dem Server also nichts. Eine Voreinstellung gehört einem Benutzer, ihr Name ist je Benutzer eindeutig, ohne Rücksicht auf Groß- und Kleinschreibung. Eine Anmeldung gibt es noch nicht, deshalb gehört alles dem einen Benutzer `local`, den die Datenbank anlegt. Ein Host mit Authentifizierung ersetzt den Dienst `ICurrentUser`; die Ablage bleibt, wie sie ist.
+
+| Endpunkt | Anfrage | Antwort |
+|---|---|---|
+| `GET /api/presets` | – | `[{ "id": 1, "name": "Live", "form": { … }, "updatedAt": "2026-09-22T14:05:00.000Z" }]`, nach Name sortiert |
+| `PUT /api/presets/{name}` | `{ "form": { … } }` (ein JSON-Objekt, höchstens 64 KiB; der Name höchstens 64 Zeichen) | `201` mit der Voreinstellung, wenn sie neu ist, `200`, wenn sie eine gleichen Namens ersetzt hat; `400` mit dem Grund |
+| `DELETE /api/presets/{name}` | – | `204`; `404` bei unbekanntem Namen |
 
 Wo die Datei liegt, bestimmt `Data:Path` (im Container `Data__Path`); leer heißt `App_Data/yue-to-logic.db` neben der Anwendung, so läuft es in der Entwicklung. Datei und Tabellen entstehen bei der ersten Benutzung, sodass ein Server mit nicht beschreibbarem Datenverzeichnis trotzdem konvertiert – nur die Instrument-Endpunkte schlagen fehl, und die Oberfläche sagt das und arbeitet ohne Instrumente weiter. Das Schema trägt eine Version, und eine Datei aus einer früheren Ausgabe wird beim ersten Öffnen an Ort und Stelle angehoben.
 

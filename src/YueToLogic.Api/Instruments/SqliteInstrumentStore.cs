@@ -1,40 +1,20 @@
 using Microsoft.Data.Sqlite;
+using YueToLogic.Api.Data;
 using YueToLogic.Core.Arrangement;
 
 namespace YueToLogic.Api.Instruments;
 
 /// <summary>
-/// The instruments in one SQLite file. The file and its tables are created on first use, so a server whose
-/// data directory is not writable still starts and converts; only the instrument endpoints fail then.
+/// The instruments in the application's SQLite file; <see cref="SqliteDatabase"/> owns the file and its
+/// schema, this class only its two tables. Instruments have no owner: a studio has one set of hardware,
+/// whoever is logged in.
 /// </summary>
-/// <remarks>
-/// Every call opens its own connection; Microsoft.Data.Sqlite pools them, and SQLite's file lock serializes
-/// the writers. The schema carries a version in <c>PRAGMA user_version</c> so that later changes can be
-/// applied in order to a file an earlier release wrote: version 2 added the instrument's kind and, for a
-/// drum machine, one column per drum with the note it plays on - a synthesizer leaves them NULL.
-/// </remarks>
-public sealed class SqliteInstrumentStore : IInstrumentStore
+public sealed class SqliteInstrumentStore(SqliteDatabase database) : IInstrumentStore
 {
-    private const int SchemaVersion = 2;
-
     private const string Columns = "id, name, port, channel, kind, drum_kick, drum_snare, drum_closed_hihat, drum_open_hihat, drum_crash, drum_clap";
 
     /// <summary>SQLITE_CONSTRAINT_UNIQUE: the extended result code of a violated UNIQUE constraint.</summary>
     private const int UniqueConstraintViolated = 2067;
-
-    private readonly string _connectionString;
-    private readonly Lock _gate = new();
-    private bool _ready;
-
-    public SqliteInstrumentStore(string path)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        Path = System.IO.Path.GetFullPath(path);
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = Path, Mode = SqliteOpenMode.ReadWriteCreate }.ToString();
-    }
-
-    /// <summary>Where the file is, for the log and for tests.</summary>
-    public string Path { get; }
 
     public IReadOnlyList<Instrument> List()
     {
@@ -171,85 +151,7 @@ public sealed class SqliteInstrumentStore : IInstrumentStore
         Execute(connection, "DELETE FROM track_assignments WHERE track = $track", ("$track", track));
     }
 
-    private SqliteConnection Open()
-    {
-        EnsureCreated();
-        var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-        Execute(connection, "PRAGMA foreign_keys = ON");
-        return connection;
-    }
-
-    /// <summary>Creates the directory, the file and the tables the first time the store is used.</summary>
-    private void EnsureCreated()
-    {
-        if (_ready)
-        {
-            return;
-        }
-
-        lock (_gate)
-        {
-            if (_ready)
-            {
-                return;
-            }
-
-            if (System.IO.Path.GetDirectoryName(Path) is { Length: > 0 } directory)
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            using var connection = new SqliteConnection(_connectionString);
-            connection.Open();
-            using (var version = connection.CreateCommand())
-            {
-                version.CommandText = "PRAGMA user_version";
-                var current = (long)version.ExecuteScalar()!;
-                if (current < 1)
-                {
-                    Execute(
-                        connection,
-                        """
-                        CREATE TABLE IF NOT EXISTS instruments (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            name TEXT NOT NULL COLLATE NOCASE UNIQUE,
-                            port TEXT NOT NULL,
-                            channel INTEGER NOT NULL CHECK (channel BETWEEN 1 AND 16),
-                            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-                        );
-                        CREATE TABLE IF NOT EXISTS track_assignments (
-                            track TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
-                            instrument_id INTEGER NOT NULL REFERENCES instruments (id) ON DELETE CASCADE
-                        );
-                        """);
-                }
-
-                if (current < 2)
-                {
-                    // Version 2: the instrument's kind, and the drum notes of a drum machine. A file from version 1
-                    // holds synthesizers only, which the column default says.
-                    Execute(
-                        connection,
-                        """
-                        ALTER TABLE instruments ADD COLUMN kind TEXT NOT NULL DEFAULT 'Synth';
-                        ALTER TABLE instruments ADD COLUMN drum_kick INTEGER;
-                        ALTER TABLE instruments ADD COLUMN drum_snare INTEGER;
-                        ALTER TABLE instruments ADD COLUMN drum_closed_hihat INTEGER;
-                        ALTER TABLE instruments ADD COLUMN drum_open_hihat INTEGER;
-                        ALTER TABLE instruments ADD COLUMN drum_crash INTEGER;
-                        ALTER TABLE instruments ADD COLUMN drum_clap INTEGER;
-                        """);
-                }
-
-                // Later versions add their steps here, each guarded by `current < n`, before the version is set.
-                Execute(connection, $"PRAGMA user_version = {SchemaVersion}");
-            }
-
-            _ready = true;
-        }
-    }
+    private SqliteConnection Open() => database.Open();
 
     private static Instrument? Get(SqliteConnection connection, long id)
     {
@@ -278,15 +180,6 @@ public sealed class SqliteInstrumentStore : IInstrumentStore
         return new Instrument(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3), kind, drums);
     }
 
-    private static int Execute(SqliteConnection connection, string sql, params (string Name, object Value)[] parameters)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        return command.ExecuteNonQuery();
-    }
+    private static int Execute(SqliteConnection connection, string sql, params (string Name, object Value)[] parameters) =>
+        SqliteDatabase.Execute(connection, sql, parameters);
 }
