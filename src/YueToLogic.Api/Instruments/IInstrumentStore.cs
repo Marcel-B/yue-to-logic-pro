@@ -12,11 +12,11 @@ public interface IInstrumentStore
     Instrument? Get(long id);
 
     /// <exception cref="DuplicateInstrumentNameException">An instrument of that name exists already (case-insensitively).</exception>
-    Instrument Add(string name, string port, int channel);
+    Instrument Add(InstrumentValues values);
 
     /// <returns>The changed instrument, or <c>null</c> when there is none with that id.</returns>
     /// <exception cref="DuplicateInstrumentNameException">Another instrument has that name already.</exception>
-    Instrument? Update(long id, string name, string port, int channel);
+    Instrument? Update(long id, InstrumentValues values);
 
     /// <summary>Removes the instrument and every assignment of a track to it.</summary>
     /// <returns>Whether there was an instrument with that id.</returns>

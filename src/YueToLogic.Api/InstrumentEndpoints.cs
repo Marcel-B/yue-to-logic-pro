@@ -4,8 +4,9 @@ using YueToLogic.Api.Instruments;
 namespace YueToLogic.Api;
 
 /// <summary>
-/// The instrument library: named MIDI port and channel combinations, and which track plays which. Both live
-/// on the server so that every browser the user opens the interface from sees the same setup.
+/// The instrument library: named MIDI port and channel combinations - a drum machine among them with the
+/// notes of its drums - and which track plays which. Both live on the server so that every browser the user
+/// opens the interface from sees the same setup.
 /// </summary>
 public static class InstrumentEndpoints
 {
@@ -22,11 +23,11 @@ public static class InstrumentEndpoints
 
         instruments.MapPost("/", Create)
             .WithName("CreateInstrument")
-            .WithSummary("Adds an instrument: a name for a MIDI port and channel (1-16). The name must be new.");
+            .WithSummary("Adds an instrument: a name for a MIDI port and channel (1-16). The name must be new. A kind of DrumMachine takes the notes of its drums (kick, snare, closedHiHat, openHiHat, crash, clap; General MIDI when left out), which the drum tracks that play it are generated on.");
 
         instruments.MapPut("/{id:long}", Update)
             .WithName("UpdateInstrument")
-            .WithSummary("Changes an instrument's name, port or channel.");
+            .WithSummary("Changes an instrument's name, port, channel, kind or drum notes.");
 
         instruments.MapDelete("/{id:long}", Delete)
             .WithName("DeleteInstrument")
@@ -50,10 +51,9 @@ public static class InstrumentEndpoints
             return Invalid(problems);
         }
 
-        var (name, port, channel) = input.Cleaned();
         try
         {
-            var instrument = store.Add(name, port, channel);
+            var instrument = store.Add(input.Cleaned());
             return Results.Created($"/api/instruments/{instrument.Id}", instrument);
         }
         catch (DuplicateInstrumentNameException exception)
@@ -69,10 +69,9 @@ public static class InstrumentEndpoints
             return Invalid(problems);
         }
 
-        var (name, port, channel) = input.Cleaned();
         try
         {
-            return store.Update(id, name, port, channel) is { } instrument ? Results.Ok(instrument) : NotFound(id);
+            return store.Update(id, input.Cleaned()) is { } instrument ? Results.Ok(instrument) : NotFound(id);
         }
         catch (DuplicateInstrumentNameException exception)
         {

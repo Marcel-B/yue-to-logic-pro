@@ -1,5 +1,5 @@
 import { AUDIO_OUTPUT, type MidiPort, type Routing } from './player'
-import type { Assignments, ConversionOptions, Instrument, LogicInstrument } from './types'
+import { DRUMS, GENERAL_MIDI_DRUMS, type Assignments, type ConversionOptions, type DrumNotes, type Instrument, type LogicInstrument } from './types'
 
 /**
  * Instruments are what the user calls a MIDI port and channel: "Mother32" rather than "MIDI4x4 Midi Out 1,
@@ -68,6 +68,60 @@ export function withInstrumentChannels(
     midiChannels[track] = instrument.channel
   }
   return { ...options, midiChannels }
+}
+
+/** The drum machine a track plays, or null when its instrument is a synthesizer or it has none. */
+function drumMachineOf(track: string, assignments: Assignments, instruments: Instrument[]): DrumNotes | null {
+  const instrument = instrumentOf(track, assignments, instruments)
+  return instrument?.kind === 'DrumMachine' ? instrument.drums : null
+}
+
+/** Which drum track carries which drums of the kit, as the split kit sorts them. */
+const DRUM_TRACKS: Record<string, readonly (keyof DrumNotes)[]> = {
+  Kick: ['kick'],
+  Snare: ['snare'],
+  HiHat: ['closedHiHat', 'openHiHat'],
+  Crash: ['crash'],
+}
+
+/**
+ * The notes the drums are generated on, taken from the drum machine each drum track plays: with one drum
+ * track from the machine on `Drums`; with a split kit each track from its own, so a kick on one machine and a
+ * snare on another both come out right. A track without a drum machine keeps General MIDI. The count-in click
+ * takes the clap of the machine the click lands on, which is the first drum track. Null when no drum machine
+ * is involved, so the options say nothing about notes then.
+ */
+export function withDrumNotes(options: ConversionOptions, assignments: Assignments, instruments: Instrument[]): ConversionOptions {
+  const drums = options.arrangement.drums
+  if (!drums) {
+    return options
+  }
+
+  let notes: DrumNotes | null = null
+  if (!drums.separateTracks) {
+    notes = drumMachineOf('Drums', assignments, instruments)
+  } else {
+    const machines = Object.entries(DRUM_TRACKS).map(([track, roles]) => [roles, drumMachineOf(track, assignments, instruments)] as const)
+    if (machines.some(([, machine]) => machine !== null)) {
+      const merged: DrumNotes = { ...GENERAL_MIDI_DRUMS }
+      for (const [roles, machine] of machines) {
+        if (machine) {
+          for (const role of roles) {
+            merged[role] = machine[role]
+          }
+        }
+      }
+      // The click of a count-in goes on the first drum track, the kick's.
+      merged.clap = drumMachineOf('Kick', assignments, instruments)?.clap ?? GENERAL_MIDI_DRUMS.clap
+      notes = merged
+    }
+  }
+
+  if (!notes) {
+    return options
+  }
+  const complete = Object.fromEntries(DRUMS.map((drum) => [drum, notes[drum]])) as unknown as DrumNotes
+  return { ...options, arrangement: { ...options.arrangement, drums: { ...drums, notes: complete } } }
 }
 
 /** What the Logic export needs to know per track: the instrument's name, port and channel. */

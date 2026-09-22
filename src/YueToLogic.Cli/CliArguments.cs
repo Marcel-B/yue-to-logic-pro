@@ -57,6 +57,12 @@ internal sealed record CliArguments
     /// <summary>One track per drum instead of one drum track.</summary>
     public bool SplitDrums { get; init; }
 
+    /// <summary>
+    /// The notes of a drum machine, from <c>--drum-note kick=C1</c>; drums not named keep their General MIDI
+    /// note. <c>null</c> until the first such flag, so the options say nothing about notes without one.
+    /// </summary>
+    public DrumNotes? DrumNotes { get; init; }
+
     public bool GuideTones { get; init; }
 
     public int GuideOctave { get; init; }
@@ -286,6 +292,24 @@ internal sealed record CliArguments
                 case "--split-drums":
                     result = result with { SplitDrums = true, Drums = result.Drums ?? DrumPattern.FourOnTheFloor };
                     break;
+                case "--drum-note":
+                    if (!TryTakeValue(args, ref i, text, out var drumNote, out error))
+                    {
+                        return false;
+                    }
+
+                    var equals = drumNote.IndexOf('=');
+                    if (equals <= 0
+                        || !DrumNames.TryGetValue(drumNote[..equals].Trim(), out var drum)
+                        || !NoteNames.TryParse(drumNote[(equals + 1)..], out var note))
+                    {
+                        error = text.Format(text.InvalidDrumNote, drumNote, string.Join(", ", DrumNames.Keys));
+                        return false;
+                    }
+
+                    var notes = result.DrumNotes ?? new DrumNotes();
+                    result = result with { DrumNotes = WithNote(notes, drum, note), Drums = result.Drums ?? DrumPattern.FourOnTheFloor };
+                    break;
                 case "--no-crash":
                     result = result with { Crash = false };
                     break;
@@ -432,7 +456,7 @@ internal sealed record CliArguments
             DefaultOctaveShift = Octave,
             OctaveShifts = shifts,
             Bass = Bass is { } pattern ? new BassOptions { Pattern = pattern, OctaveShift = BassOctave } : null,
-            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums, CrashOnSections = Crash, SeparateTracks = SplitDrums } : null,
+            Drums = Drums is { } drums ? new DrumOptions { Pattern = drums, CrashOnSections = Crash, SeparateTracks = SplitDrums, Notes = DrumNotes } : null,
             Chords = chords,
             GuideTones = GuideTones ? new GuideToneOptions { OctaveShift = GuideOctave } : null,
             Doubling = DoubleVocal ? new DoublingOptions { Semitones = 12 * DoubleOctave } : null,
@@ -490,6 +514,28 @@ internal sealed record CliArguments
     {
         ["eighths"] = SwingUnit.Eighths,
         ["sixteenths"] = SwingUnit.Sixteenths,
+    };
+
+    /// <summary>The drums of <c>--drum-note</c>, spelled as the flag takes them.</summary>
+    private static readonly Dictionary<string, Drum> DrumNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["kick"] = Drum.Kick,
+        ["snare"] = Drum.Snare,
+        ["closed-hihat"] = Drum.ClosedHiHat,
+        ["open-hihat"] = Drum.OpenHiHat,
+        ["crash"] = Drum.Crash,
+        ["clap"] = Drum.Clap,
+    };
+
+    private static DrumNotes WithNote(DrumNotes notes, Drum drum, int note) => drum switch
+    {
+        Drum.Kick => notes with { Kick = note },
+        Drum.Snare => notes with { Snare = note },
+        Drum.ClosedHiHat => notes with { ClosedHiHat = note },
+        Drum.OpenHiHat => notes with { OpenHiHat = note },
+        Drum.Crash => notes with { Crash = note },
+        Drum.Clap => notes with { Clap = note },
+        _ => notes,
     };
 
     private static readonly Dictionary<string, DrumPattern> DrumPatterns = new(StringComparer.OrdinalIgnoreCase)
