@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, useTemplateRef } from 'vue'
-import { ApiError, deleteVoiceJob, listVoiceJobs } from '../api'
+import { ApiError, deleteVoiceJob, downloadVoiceResult, listVoiceJobs } from '../api'
 import { formatDateTime, locale, t } from '../i18n'
+import { download } from '../score'
 import type { VoiceJob } from '../types'
 
 /**
@@ -45,6 +46,8 @@ const error = ref<string | null>(null)
 const unsupported = ref(false)
 /** The job being removed right now; its button is disabled meanwhile. */
 const removing = ref<string | null>(null)
+/** The job whose result is being fetched right now; its button says so meanwhile. */
+const fetching = ref<string | null>(null)
 let timer: number | undefined
 let pending: AbortController | null = null
 
@@ -147,6 +150,37 @@ function action(job: VoiceJob): 'cancel' | 'delete' | null {
     return 'cancel'
   }
   return job.hasResult ? 'delete' : null
+}
+
+/**
+ * A finished job still holding its result can be fetched here too. The panel only knows this session's job,
+ * and one started in another browser or tab has no panel at all - without this, a result could only be
+ * reached by starting the conversion over. Fetching changes nothing at the service: the result stays until it
+ * is deleted or the retention is over, so the row keeps both buttons afterwards.
+ */
+function canDownload(job: VoiceJob): boolean {
+  return status(job) === 'COMPLETED' && job.hasResult
+}
+
+/** Fetches a finished job's converted vocals as a WAV. */
+async function fetchResult(job: VoiceJob): Promise<void> {
+  if (fetching.value) {
+    return
+  }
+
+  fetching.value = job.id
+  error.value = null
+  try {
+    download(await downloadVoiceResult(job.id), `voice-${shortId(job.id)}.wav`)
+  } catch (caught) {
+    fail(caught)
+    // The result was cleared away between the last refresh and the click; the list is what says so.
+    if (caught instanceof ApiError && (caught.status === 404 || caught.status === 410)) {
+      await refresh()
+    }
+  } finally {
+    fetching.value = null
+  }
 }
 
 /** Cancels a waiting job or removes a finished one. */
@@ -257,7 +291,7 @@ defineExpose({ open })
           <th>{{ t('voiceJobsStatus') }}</th>
           <th>{{ t('voiceJobsCreated') }}</th>
           <th>{{ t('voiceJobsFinished') }}</th>
-          <th><span class="sr-only">{{ t('voiceJobsDelete') }}</span></th>
+          <th><span class="sr-only">{{ t('voiceJobsActions') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -272,10 +306,25 @@ defineExpose({ open })
           <td class="time">{{ when(job.createdUtc) }}</td>
           <td class="time">{{ when(job.finishedUtc) }}</td>
           <td class="actions">
-            <button v-if="action(job)" type="button" class="link" :disabled="removing !== null" @click="remove(job)">
+            <button
+              v-if="canDownload(job)"
+              type="button"
+              class="link"
+              :disabled="fetching !== null || removing !== null"
+              @click="fetchResult(job)"
+            >
+              {{ fetching === job.id ? t('voiceJobsDownloading') : t('voiceJobsDownload') }}
+            </button>
+            <button
+              v-if="action(job)"
+              type="button"
+              class="link"
+              :disabled="removing !== null || fetching !== null"
+              @click="remove(job)"
+            >
               {{ action(job) === 'cancel' ? t('voiceJobsCancel') : t('voiceJobsDelete') }}
             </button>
-            <span v-else class="muted cleared">{{ t('voiceJobsCleared') }}</span>
+            <span v-else-if="!canDownload(job)" class="muted cleared">{{ t('voiceJobsCleared') }}</span>
           </td>
         </tr>
       </tbody>
@@ -425,6 +474,11 @@ code {
 .actions {
   text-align: right;
   white-space: nowrap;
+}
+
+/* A finished job offers both buttons; they need to stay two words, not one. */
+.actions .link + .link {
+  margin-left: 0.6rem;
 }
 
 .cleared {
