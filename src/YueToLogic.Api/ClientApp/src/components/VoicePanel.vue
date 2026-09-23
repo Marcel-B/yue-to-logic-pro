@@ -100,9 +100,13 @@ onUnmounted(() => window.clearTimeout(timer))
 
 function reset(): void {
   window.clearTimeout(timer)
-  // A result nobody is going to import any more: let the service drop it now rather than after its retention.
-  if (job.value) {
-    void forgetVoiceJob(job.value)
+  // Everything this panel still holds at the service goes: a finished result nobody is going to import, and
+  // a conversion that is still running. The running one matters most - it is only known here, so dropping it
+  // silently would leave its files on the service until the cleanup run, and the Mac would compute a result
+  // that nobody ever collects.
+  const pending = job.value ?? jobId
+  if (pending) {
+    void forgetVoiceJob(pending)
   }
   close()
   jobId = null

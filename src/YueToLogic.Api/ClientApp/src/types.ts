@@ -197,6 +197,11 @@ export interface VoiceJob {
   errorCode: string | null
   errorMessage: string | null
   resultSizeBytes: number | null
+  /**
+   * Whether the converted recording can still be fetched. The service keeps a record of every job it ever
+   * had, so one whose files are gone stays in the list; this is what tells the two apart.
+   */
+  hasResult: boolean
 }
 
 export type VoiceJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'

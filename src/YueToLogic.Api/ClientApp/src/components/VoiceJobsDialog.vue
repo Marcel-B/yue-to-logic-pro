@@ -137,9 +137,21 @@ async function refresh(): Promise<void> {
   }
 }
 
+/**
+ * What can still be done with a job: a waiting or running one is cancelled, a finished one whose result is
+ * still there is removed. A job the service has already cleared away stays in the list as a record, and there
+ * is nothing left to delete - saying so beats a button that answers 204 and changes nothing visible.
+ */
+function action(job: VoiceJob): 'cancel' | 'delete' | null {
+  if (status(job) === 'QUEUED' || status(job) === 'RUNNING') {
+    return 'cancel'
+  }
+  return job.hasResult ? 'delete' : null
+}
+
 /** Cancels a waiting job or removes a finished one. */
 async function remove(job: VoiceJob): Promise<void> {
-  const key = status(job) === 'QUEUED' || status(job) === 'RUNNING' ? 'voiceJobsCancelConfirm' : 'voiceJobsDeleteConfirm'
+  const key = action(job) === 'cancel' ? 'voiceJobsCancelConfirm' : 'voiceJobsDeleteConfirm'
   if (removing.value || !window.confirm(t(key, { id: shortId(job.id) }))) {
     return
   }
@@ -260,9 +272,10 @@ defineExpose({ open })
           <td class="time">{{ when(job.createdUtc) }}</td>
           <td class="time">{{ when(job.finishedUtc) }}</td>
           <td class="actions">
-            <button type="button" class="link" :disabled="removing !== null" @click="remove(job)">
-              {{ status(job) === 'QUEUED' || status(job) === 'RUNNING' ? t('voiceJobsCancel') : t('voiceJobsDelete') }}
+            <button v-if="action(job)" type="button" class="link" :disabled="removing !== null" @click="remove(job)">
+              {{ action(job) === 'cancel' ? t('voiceJobsCancel') : t('voiceJobsDelete') }}
             </button>
+            <span v-else class="muted cleared">{{ t('voiceJobsCleared') }}</span>
           </td>
         </tr>
       </tbody>
@@ -412,6 +425,10 @@ code {
 .actions {
   text-align: right;
   white-space: nowrap;
+}
+
+.cleared {
+  font-size: 0.8rem;
 }
 
 .link:disabled {
