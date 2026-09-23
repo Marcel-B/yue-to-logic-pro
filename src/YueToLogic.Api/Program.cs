@@ -80,6 +80,7 @@ var api = app.MapGroup("/api");
 // HEAD as well, since uptime monitors often probe with it.
 api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
 api.MapConvertEndpoints();
+api.MapMidiEndpoints();
 api.MapStemEndpoints();
 api.MapVoiceEndpoints();
 api.MapInstrumentEndpoints();

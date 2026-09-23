@@ -8,7 +8,7 @@
 
 The long-term goal of this project is a Logic Pro project with the generated audio as a region and matching MIDI tracks below it. It is meant as a starting point for analysing, editing or extending a song, not as a perfect transcription.
 
-**Current state:** converts `score.abc` into a MIDI file and, together with the YuE audio, into a Logic Pro project — from the command line or in a web interface.
+**Current state:** converts `score.abc` into a MIDI file and, together with the YuE audio, into a Logic Pro project — from the command line or in a web interface. The way back works as well: a MIDI file edited in Logic becomes a `score.abc` for YuE2 again (see [Back to YuE2](#back-to-yue2-midi-to-abc)).
 
 ## Usage
 
@@ -126,6 +126,7 @@ If the frontend is built separately, for example in its own Docker stage, pass `
 | `POST /api/convert` | multipart form: `file` (the score), optional `options` (JSON, see below) | `200` with score, diagnostics and `midi` (base64) as JSON; `422` with diagnostics if the score or options cannot be used; `400` for a missing file or malformed options |
 | `POST /api/convert/midi` | same | the MIDI file (`audio/midi`) |
 | `POST /api/convert/logic` | as above, with optional `audio` (the `audio.flac`, up to 250 MB), `name`, `splitSections` (`true` for one region per song section) and `instruments` (JSON: track name → `{ "name", "port", "channel" }`, see [Instruments](#instruments)) | a ZIP with `<name>.logicx`; warnings in the `X-YueToLogic-Diagnostics` header; `422` if the audio is not a 48 kHz FLAC |
+| `POST /api/midi/abc` | multipart form: `file` (a MIDI file, up to 4 MB), optional `options` (JSON: `{"trackRoles": {"1": "Ignore"}, "skipBars": 0}`) | `200` with `abc`, the score, the file's `tracks` (index, name, channel, notes, role) and diagnostics as JSON; `422` if no score could be made, with the tracks still listed; `400` for a missing file or malformed options. See [Back to YuE2](#back-to-yue2-midi-to-abc) |
 | `GET /api/health` | – | `ok` |
 
 `options` is the JSON form of `ConversionOptions`; every field is optional:
@@ -340,6 +341,30 @@ The web interface offers the same under *Fit the tempo to the audio length*, and
 
 In a Logic project the audio moves too: the MIDI regions still begin at bar 1 and carry the silent bars inside them, while the recording, which has no count-in of its own, starts where the music does. With `--logic-split-sections` the lead-in becomes a region of its own in front of the first section.
 
+## Back to YuE2: MIDI to ABC
+
+The way back, for when a song has been generated, opened in Logic and changed there: a MIDI file becomes a `score.abc` again, which YuE2 can carry on with. In Logic, select all regions and export them with *File → Export → Selection as MIDI File*; then drop the file on the card *Back to YuE2* in the web interface and copy the score (or download it as `.abc`), or on the command line:
+
+```sh
+dotnet run --project src/YueToLogic.Cli -- song.mid     # writes song.abc
+```
+
+| Option | Meaning |
+|---|---|
+| `-o, --output <file>` | Score to write; `.abc` is appended if missing (default: `<input>.abc`) |
+| `--track <n>=<role>` | Role of the `n`-th track as the summary lists it: `vocal`, `ins`, `chords` or `ignore`; repeatable |
+| `--skip-bars <n>` | Leave out the first `n` bars (default: the silent ones before the first note) |
+| `--dump-json <file>`, `-f`, `-v` | as above |
+
+What becomes of the file undoes the way there, as far as the dialect can say it:
+
+- **Tracks.** Each track (each channel of a track that plays on several) gets a role by its name: `Vocal`, `Ins` and `Chords`, as the MIDI file and the Logic project of this tool name them — Logic's *Bass · Mother32* counts by the part before the dot. Bass, drums, guide tones, doublings and channel 10 are left out. A file without those names gets them by sound and order: a track that strikes chords becomes Chords, the first other one Vocal, the next Ins. The web interface lists the tracks with a selection for each, `--track` does the same (`YTL076` reports what became what).
+- **Rhythm.** Notes move to the nearest sixteenth, the unit of YuE2's scores; that also undoes swing and humanizing, while triplets cannot be written (`YTL072` counts the moved notes). Each voice plays one note at a time: of notes starting together the highest stays, a note ends where the next begins (`YTL073`).
+- **Chords.** The chord track is read back into symbols of YuE2's vocabulary, beat by beat: block chords, the pulses, the off-beat stabs and the arpeggios the arranger plays, or what was played in Logic, slash chords included (C/E is a bass set apart below the chord, E G C an inversion). Some sets name two chords at once — C E G A is C6 over C and Am7 over A — and come back as the one the bass suggests; the same notes sound. Beats that form no chord keep the one before (`YTL074`). As in YuE2's scores, the chord in effect is written at the start of every bar of `Vocal`.
+- **Start and tempo.** Silent bars at the start, such as a [count-in](#count-in), are left out (`YTL075`); `--skip-bars` or the field in the web interface set the number by hand. YuE2 knows one tempo: the one at the start is kept, rounded to whole BPM (`YTL077`). Meter and key changes go to the bar line (`YTL078`), markers become section comments (`% chorus`).
+
+The score is laid out as YuE2 writes its own: `L:1/16`, groups of four bars with a line per voice, `z16` for an empty bar of `Vocal` and `Z4` for an empty group of `Ins`. The official example comes back character for character, from its MIDI file with bass, drums and a count-in as well. A file that is no MIDI file is refused (`YTL070`), one whose tracks give no notes for any voice as well (`YTL071`), but its tracks are still listed so their roles can be chosen.
+
 ## The input format
 
 YuE2 writes a deliberately small subset of ABC notation. A generic ABC parser would misread it: most importantly, an accidental applies to its note letter **in every octave** until the bar line (after `^F`, `f` is sharp too). The parser in this project follows the YuE2 rules and reports everything outside them as a diagnostic instead of failing, so hand-edited scores still convert. The full rules are described in [YuE2's ABC editing reference](https://github.com/multimodal-art-projection/YuE/blob/main/skills/yue2-music/references/abc-editing.md).
@@ -363,7 +388,7 @@ samples/score.abc       Official YuE2 example score
 
 - Input is a `string` or `Stream`, output is a `byte[]` or a caller-supplied `Stream`.
 - Option ranges are checked by `ConversionOptionsValidator`, so every host accepts the same values.
-- `services.AddYueToLogic()` registers the stateless `IScoreConverter`, `IAbcScoreParser`, `IScoreArranger` and `IMidiRenderer` for dependency injection.
+- `services.AddYueToLogic()` registers the stateless `IScoreConverter`, `IAbcScoreParser`, `IScoreArranger`, `IMidiRenderer`, `IAbcScoreWriter` and `IMidiToAbcConverter` for dependency injection.
 - `ConversionResult` and the `ScoreDocument` model serialize to JSON via the source-generated `YueToLogicJsonContext`, so a frontend can display the score without parsing MIDI.
 - Problems are returned as `Diagnostic` records with stable codes (`YTL0xx`) instead of being logged or thrown.
 

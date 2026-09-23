@@ -56,6 +56,14 @@ internal sealed class CliText
     public required string ChordsValue { get; init; }
     public required string ChordsSkipped { get; init; }
     public required string None { get; init; }
+    public required string InvalidTrackRole { get; init; }
+    public required string InvalidSkipBars { get; init; }
+    public required string NotForMidiInput { get; init; }
+    public required string OnlyForMidiInput { get; init; }
+    public required string MidiConversionFailed { get; init; }
+    public required string LabelAbc { get; init; }
+    public required string TrackValue { get; init; }
+    public required string RoleIgnored { get; init; }
 
     public static CliText ForCurrentCulture() =>
         CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "de" ? German : English;
@@ -73,10 +81,11 @@ internal sealed class CliText
     private static readonly CliText English = new()
     {
         Usage = """
-            yue2logic - converts a YuE2 score.abc into a MIDI file for Logic Pro
+            yue2logic - converts a YuE2 score.abc into a MIDI file for Logic Pro, and a MIDI file back into a score.abc
 
             Usage:
               yue2logic <score.abc> [options]
+              yue2logic <song.mid> [-o <score.abc>] [--track <n>=<role>] [--skip-bars <n>]
 
             Options:
               -o, --output <file>     MIDI file to write, .mid is added if missing (default: <input>.mid)
@@ -133,6 +142,14 @@ internal sealed class CliText
               -v, --verbose           Also show informational messages
               -h, --help              Show this help
 
+            The way back: a MIDI file (.mid, e.g. exported from Logic after editing the project) becomes a
+            score.abc for YuE2 again (default: <input>.abc). The tracks named Vocal, Ins and Chords become
+            the two voices and the chord symbols, notes move to the sixteenth grid, and silent bars at the
+            start (a count-in) are left out.
+                  --track <n>=<role>  Role of the n-th track as the summary lists it: vocal, ins, chords or
+                                      ignore; repeatable, the rest keep the role their name suggests
+                  --skip-bars <n>     Leave out the first n bars (default: the silent ones)
+
             Exit codes: 0 success, 1 score could not be converted, 2 invalid arguments or file error
             """,
         MissingInput = "No input file given.",
@@ -181,15 +198,24 @@ internal sealed class CliText
         ChordsValue = "Chords: {0}",
         ChordsSkipped = "Chords: not written (--no-chords)",
         None = "none",
+        InvalidTrackRole = "--track expects <n>=<role> with the number of a track from 1 and a role of {1}, got '{0}'.",
+        InvalidSkipBars = "Invalid --skip-bars value '{0}'; expected a whole number between 0 and {1}.",
+        NotForMidiInput = "{0} does not apply to a MIDI file as input; that only becomes a score.abc.",
+        OnlyForMidiInput = "{0} only applies to a MIDI file (.mid) as input.",
+        MidiConversionFailed = "The MIDI file could not be turned into a score.",
+        LabelAbc = "ABC",
+        TrackValue = "{0} {1} → {2}",
+        RoleIgnored = "ignored",
     };
 
     private static readonly CliText German = new()
     {
         Usage = """
-            yue2logic - wandelt eine YuE2-score.abc in eine MIDI-Datei für Logic Pro um
+            yue2logic - wandelt eine YuE2-score.abc in eine MIDI-Datei für Logic Pro um und eine MIDI-Datei zurück in eine score.abc
 
             Aufruf:
               yue2logic <score.abc> [Optionen]
+              yue2logic <song.mid> [-o <score.abc>] [--track <n>=<rolle>] [--skip-bars <n>]
 
             Optionen:
               -o, --output <datei>    Zu schreibende MIDI-Datei, .mid wird ggf. ergänzt (Standard: <eingabe>.mid)
@@ -246,6 +272,15 @@ internal sealed class CliText
               -v, --verbose           Auch Info-Meldungen anzeigen
               -h, --help              Diese Hilfe anzeigen
 
+            Der Rückweg: Aus einer MIDI-Datei (.mid, z. B. nach dem Bearbeiten aus Logic exportiert) wird
+            wieder eine score.abc für YuE2 (Standard: <eingabe>.abc). Die Spuren Vocal, Ins und Chords werden
+            zu den beiden Stimmen und den Akkordsymbolen, Noten rücken auf das Sechzehntelraster, und stille
+            Takte am Anfang (ein Einzähler) fallen weg.
+                  --track <n>=<rolle> Rolle der n-ten Spur, wie die Zusammenfassung sie auflistet: vocal, ins,
+                                      chords oder ignore; mehrfach möglich, der Rest behält die Rolle, die
+                                      sein Name nahelegt
+                  --skip-bars <n>     Die ersten n Takte weglassen (Standard: die stillen)
+
             Exit-Codes: 0 Erfolg, 1 Score nicht konvertierbar, 2 ungültige Argumente oder Dateifehler
             """,
         MissingInput = "Keine Eingabedatei angegeben.",
@@ -294,5 +329,13 @@ internal sealed class CliText
         ChordsValue = "Akkorde: {0}",
         ChordsSkipped = "Akkorde: nicht geschrieben (--no-chords)",
         None = "keine",
+        InvalidTrackRole = "--track erwartet <n>=<Rolle> mit der Nummer einer Spur ab 1 und einer Rolle aus {1}, bekam '{0}'.",
+        InvalidSkipBars = "Ungültiger Wert für --skip-bars: '{0}'; erwartet wird eine ganze Zahl zwischen 0 und {1}.",
+        NotForMidiInput = "{0} gilt nicht für eine MIDI-Datei als Eingabe; aus der wird nur eine score.abc.",
+        OnlyForMidiInput = "{0} gilt nur für eine MIDI-Datei (.mid) als Eingabe.",
+        MidiConversionFailed = "Aus der MIDI-Datei konnte kein Score werden.",
+        LabelAbc = "ABC",
+        TrackValue = "{0} {1} → {2}",
+        RoleIgnored = "ignoriert",
     };
 }

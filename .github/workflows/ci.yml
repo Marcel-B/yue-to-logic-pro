@@ -57,6 +57,12 @@ jobs:
           test -s out/sample.mid
           jq -e '.success and ([.score.voices[].id] == ["Vocal", "Ins", "Bass", "Drums"])' out/sample.json
 
+      # And the way back: the MIDI file, bass and drums included, becomes the example again.
+      - name: Turn the sample's MIDI file back into a score with the CLI
+        run: |
+          dotnet "src/YueToLogic.Cli/bin/$CONFIGURATION/net10.0/yue2logic.dll" out/sample.mid --output out/sample-back
+          diff <(tr -d '\r' < samples/score.abc) out/sample-back.abc
+
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4

@@ -6,6 +6,8 @@ import type {
   Instrument,
   InstrumentInput,
   LogicInstrument,
+  MidiToAbcOptions,
+  MidiToAbcResult,
   ReferenceVoice,
   SeparationModel,
   StemJob,
@@ -46,6 +48,34 @@ export async function convertScore(file: File, options: ConversionOptions, signa
 
   if (response.ok || response.status === 422) {
     return (await response.json()) as ConversionResult
+  }
+
+  const problem = (await response.json().catch(() => null)) as { title?: string; detail?: string } | null
+  throw new ApiError(problem?.detail ?? problem?.title ?? `HTTP ${response.status}`, response.status)
+}
+
+/**
+ * The way back: a MIDI file, e.g. exported from Logic after editing the project, into a score.abc for YuE2.
+ * Resolves for both 200 and 422 like `convertScore`: a file that became no score still lists its tracks, so
+ * that their roles can be chosen by hand.
+ */
+export async function convertMidi(file: File, options: MidiToAbcOptions, signal?: AbortSignal): Promise<MidiToAbcResult> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('options', JSON.stringify(options))
+
+  let response: Response
+  try {
+    response = await fetch(`${apiBase}/api/midi/abc`, { method: 'POST', body: form, signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error
+    }
+    throw new ApiError('network', 0)
+  }
+
+  if (response.ok || response.status === 422) {
+    return (await response.json()) as MidiToAbcResult
   }
 
   const problem = (await response.json().catch(() => null)) as { title?: string; detail?: string } | null
