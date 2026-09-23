@@ -25,10 +25,11 @@ public static class VoiceEndpoints
     public const long MaxVoiceBytes = 64L * 1024 * 1024;
 
     /// <summary>
-    /// Vocals brought along as a WAV are a whole song, uncompressed: at 48 kHz, 24 bit, stereo a minute is
-    /// about 17 MB, so this leaves room for long takes and 32-bit float files.
+    /// Vocals brought along as a WAV are a whole song, uncompressed. ChangeMyVoice takes at most 200 MB (and
+    /// seven minutes), so anything larger is refused here instead of after the transfer; seven minutes of
+    /// 32-bit float stereo at 48 kHz are about 160 MB.
     /// </summary>
-    public const long MaxVocalsBytes = 512L * 1024 * 1024;
+    public const long MaxVocalsBytes = 200L * 1024 * 1024;
 
     public static RouteGroupBuilder MapVoiceEndpoints(this RouteGroupBuilder api)
     {
@@ -48,6 +49,10 @@ public static class VoiceEndpoints
             .WithFormOptions(multipartBodyLengthLimit: MaxVoiceBytes)
             .WithName("AddReferenceVoice")
             .WithSummary("Stores a recording as a reference voice; the form fields are 'label' and 'file'.");
+
+        voice.MapGet("/voices/{id}/audio", DownloadVoiceAsync)
+            .WithName("ReferenceVoiceAudio")
+            .WithSummary("The recording of a reference voice as the service keeps it (mono, 44.1 kHz, at most 25 s), to listen to it again; 501 from a service that cannot hand it out.");
 
         voice.MapDelete("/voices/{id}", DeleteVoiceAsync)
             .WithName("DeleteReferenceVoice")
@@ -130,6 +135,37 @@ public static class VoiceEndpoints
             await using var audio = file.OpenReadStream();
             var voice = await service.AddVoiceAsync(label.Trim(), audio, file.FileName, cancellationToken).ConfigureAwait(false);
             return Results.Json(voice, YueToLogicJsonContext.Default.ReferenceVoice, statusCode: StatusCodes.Status201Created);
+        }
+        catch (VoiceConversionException exception)
+        {
+            return Failed(exception);
+        }
+    }
+
+    /// <summary>
+    /// The voice as the model hears it. An older ChangeMyVoice has no such route and answers 404 - but so does
+    /// a voice that is gone; only the latter names <see cref="VoiceConversionCode.VoiceNotFound"/>, and the
+    /// former becomes a 501 that the interface explains instead of claiming the voice has vanished.
+    /// </summary>
+    private static async Task<IResult> DownloadVoiceAsync(string id, IServiceProvider services, CancellationToken cancellationToken)
+    {
+        if (Service(services) is not { } service)
+        {
+            return Unavailable();
+        }
+
+        try
+        {
+            var recording = await service.DownloadVoiceAsync(id, cancellationToken).ConfigureAwait(false);
+            return Results.Stream(recording, "audio/wav", $"voice-{id}.wav");
+        }
+        catch (VoiceConversionException exception)
+            when (exception.StatusCode == HttpStatusCode.NotFound && exception.Code != VoiceConversionCode.VoiceNotFound)
+        {
+            return Results.Problem(
+                title: "Voice service cannot hand out recordings",
+                detail: "This ChangeMyVoice has no route for the recording of a voice; a newer one has.",
+                statusCode: StatusCodes.Status501NotImplemented);
         }
         catch (VoiceConversionException exception)
         {

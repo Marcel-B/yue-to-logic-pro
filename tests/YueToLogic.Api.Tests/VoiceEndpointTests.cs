@@ -51,6 +51,33 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
     }
 
     [Fact]
+    public async Task The_recording_of_a_voice_is_passed_on_to_listen_to()
+    {
+        var response = await Client(new FakeVoice()).GetAsync("/api/voice/voices/v1/audio");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("audio/wav", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("RIFFmaster v1", await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Both answer 404: a voice that is gone names its code, a service without the route does not - and only
+    /// the latter is something the interface explains as "cannot" rather than "not there".
+    /// </summary>
+    [Fact]
+    public async Task A_service_without_the_route_is_told_apart_from_a_voice_that_is_gone()
+    {
+        var oldService = Client(new FakeVoice { Failure = new VoiceConversionException("not found", HttpStatusCode.NotFound) });
+        var gone = Client(new FakeVoice { Failure = new VoiceConversionException("no such voice", HttpStatusCode.NotFound, VoiceConversionCode.VoiceNotFound) });
+
+        var cannot = await oldService.GetAsync("/api/voice/voices/v1/audio");
+        var missing = await gone.GetAsync("/api/voice/voices/v1/audio");
+
+        Assert.Equal(HttpStatusCode.NotImplemented, cannot.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
     public async Task A_voice_without_a_name_or_without_a_recording_is_refused_before_the_service_hears_of_it()
     {
         var voice = new FakeVoice();
@@ -322,6 +349,9 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
             Added = await new StreamReader(audio).ReadToEndAsync(cancellationToken);
             return Failure is null ? new ReferenceVoice("v2", label) : throw Failure;
         }
+
+        public Task<Stream> DownloadVoiceAsync(string voiceId, CancellationToken cancellationToken = default) =>
+            Failure is null ? Task.FromResult<Stream>(new MemoryStream(Encoding.UTF8.GetBytes($"RIFFmaster {voiceId}"))) : throw Failure;
 
         public Task DeleteVoiceAsync(string voiceId, CancellationToken cancellationToken = default)
         {

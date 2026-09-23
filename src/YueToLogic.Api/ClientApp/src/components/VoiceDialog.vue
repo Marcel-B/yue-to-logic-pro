@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import { addVoice, ApiError, deleteVoice, listVoices } from '../api'
+import { addVoice, ApiError, deleteVoice, downloadVoiceAudio, listVoices } from '../api'
 import { formatDateTime, formatDuration, formatNumber, t } from '../i18n'
+import { download } from '../score'
 import type { ReferenceVoice, VoiceAudioProperties } from '../types'
 
 /**
@@ -21,6 +22,8 @@ const file = ref<File | null>(null)
 const busy = ref(false)
 /** The voice being removed right now; its button is disabled meanwhile. */
 const removing = ref<string | null>(null)
+/** The voice being downloaded right now. */
+const downloading = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 function open(): void {
@@ -60,6 +63,30 @@ async function add(): Promise<void> {
     fail(caught)
   } finally {
     busy.value = false
+  }
+}
+
+/**
+ * The recording as the service keeps it, which is what the model hears - so it is the one to listen to when a
+ * conversion sounds wrong, not the file that was uploaded. Named after the voice, so it is found again.
+ */
+async function save(voice: ReferenceVoice): Promise<void> {
+  if (downloading.value) {
+    return
+  }
+
+  downloading.value = voice.id
+  error.value = null
+  try {
+    download(await downloadVoiceAudio(voice.id), `${voice.label.replace(/[\\/:*?"<>|]/g, '_')}.wav`)
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.status === 501) {
+      error.value = t('voicesDownloadUnsupported')
+    } else {
+      fail(caught)
+    }
+  } finally {
+    downloading.value = null
   }
 }
 
@@ -128,7 +155,7 @@ defineExpose({ open })
           <th>{{ t('voicesVoice') }}</th>
           <th>{{ t('voicesAudio') }}</th>
           <th>{{ t('voicesCreated') }}</th>
-          <th><span class="sr-only">{{ t('voicesDelete') }}</span></th>
+          <th><span class="sr-only">{{ t('voicesActions') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -140,6 +167,9 @@ defineExpose({ open })
           </td>
           <td class="time">{{ when(entry.createdUtc) }}</td>
           <td class="actions">
+            <button type="button" class="link" :title="t('voicesDownloadTitle')" :disabled="downloading !== null" @click="save(entry)">
+              {{ downloading === entry.id ? t('voicesDownloading') : t('voicesDownload') }}
+            </button>
             <button type="button" class="link" :disabled="removing !== null || busy" @click="remove(entry)">
               {{ t('voicesDelete') }}
             </button>
@@ -242,6 +272,11 @@ td {
 .actions {
   text-align: right;
   white-space: nowrap;
+}
+
+/* Two buttons per voice; they need to stay two words, not one. */
+.actions .link + .link {
+  margin-left: 0.6rem;
 }
 
 .add {

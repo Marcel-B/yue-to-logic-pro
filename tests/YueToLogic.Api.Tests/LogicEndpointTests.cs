@@ -313,6 +313,9 @@ public class LogicEndpointTests(WebApplicationFactory<Program> factory) : IClass
 
         public Task DeleteVoiceAsync(string voiceId, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+        public Task<Stream> DownloadVoiceAsync(string voiceId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Stream>(new MemoryStream());
+
         public Task<VoiceJob> StartJobAsync(
             Stream vocals,
             string fileName,

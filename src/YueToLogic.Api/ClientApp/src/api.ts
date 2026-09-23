@@ -213,6 +213,14 @@ export async function addVoice(label: string, file: File): Promise<ReferenceVoic
   return (await request('/api/voice/voices', { method: 'POST', body: form })).json() as Promise<ReferenceVoice>
 }
 
+/**
+ * The recording of a reference voice as the service keeps it - mono, 44.1 kHz, at most 25 seconds, what the
+ * model gets - to listen to it again. 501 from a service too old to hand it out.
+ */
+export async function downloadVoiceAudio(id: string): Promise<Blob> {
+  return (await request(`/api/voice/voices/${encodeURIComponent(id)}/audio`)).blob()
+}
+
 /** Removes a reference voice; the service refuses while a job still waits for it (409). */
 export async function deleteVoice(id: string): Promise<void> {
   await request(`/api/voice/voices/${encodeURIComponent(id)}`, { method: 'DELETE' })
