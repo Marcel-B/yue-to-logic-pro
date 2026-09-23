@@ -7,8 +7,10 @@ import {
   exportLogicProject,
   listAssignments,
   listInstruments,
+  listVoices,
   LogicExportError,
   stemsAvailable,
+  voiceAvailable,
 } from './api'
 import InstrumentDialog from './components/InstrumentDialog.vue'
 import OptionsForm from './components/OptionsForm.vue'
@@ -17,6 +19,9 @@ import ScorePreview from './components/ScorePreview.vue'
 import FileDropZone from './components/FileDropZone.vue'
 import StemPanel from './components/StemPanel.vue'
 import StemServiceDialog from './components/StemServiceDialog.vue'
+import VoiceDialog from './components/VoiceDialog.vue'
+import VoiceJobsDialog from './components/VoiceJobsDialog.vue'
+import VoicePanel from './components/VoicePanel.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
@@ -24,7 +29,7 @@ import { midiUsable } from './player'
 import { deletePreset, loadPresets, savePreset, type Preset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
-import type { Assignments, ConversionResult, Diagnostic, Instrument } from './types'
+import type { Assignments, ConversionResult, Diagnostic, Instrument, ReferenceVoice } from './types'
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
@@ -54,6 +59,43 @@ function stemJobDeleted(id: string): void {
   stemPanel.value?.forget(id)
   if (stemJob.value === id) {
     stemJob.value = null
+  }
+}
+
+/** Whether this server can have a voice changed; without a voice service the section stays away. */
+const voice = ref(false)
+/** The collection of model voices, kept by the voice service; the panel chooses from it, the dialog edits it. */
+const voices = ref<ReferenceVoice[]>([])
+/** A finished conversion, whose vocals go onto the next Logic project's vocals track. */
+const voiceJob = ref<string | null>(null)
+/** A conversion in progress; the result view says so next to its Logic button. */
+const voiceRunning = ref(false)
+/** The job the voice panel is about, running or finished; the job dialog marks it as this session's. */
+const voiceTracked = ref<string | null>(null)
+const voicePanel = useTemplateRef<InstanceType<typeof VoicePanel>>('voicePanel')
+const voiceDialog = useTemplateRef<InstanceType<typeof VoiceDialog>>('voiceDialog')
+const voiceJobsDialog = useTemplateRef<InstanceType<typeof VoiceJobsDialog>>('voiceJobsDialog')
+void voiceAvailable().then(async (available) => {
+  voice.value = available
+  if (available) {
+    // Without the collection the panel has nothing to choose from; a service that does not answer leaves it empty.
+    voices.value = await listVoices().catch(() => [])
+  }
+})
+
+function openVoices(): void {
+  voiceDialog.value?.open()
+}
+
+function openVoiceJobs(): void {
+  voiceJobsDialog.value?.open()
+}
+
+/** A job removed in the job dialog: if it was this session's, the panel and the export let go of it too. */
+function voiceJobDeleted(id: string): void {
+  voicePanel.value?.forget(id)
+  if (voiceJob.value === id) {
+    voiceJob.value = null
   }
 }
 
@@ -242,12 +284,14 @@ async function exportLogic(): Promise<void> {
       outputName.value,
       form.value.splitSections,
       stemJob.value,
+      voiceJob.value,
       instrumentsForExport(appliedAssignments.value, instruments.value),
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
-    // The server confirmed the import, so the job is gone from the stem service.
+    // The server confirmed the import, so the jobs are gone from their services.
     stemJob.value = null
+    voiceJob.value = null
   } catch (caught) {
     logicError.value =
       caught instanceof LogicExportError
@@ -269,6 +313,7 @@ function reset(): void {
   audio.value = null
   folderNote.value = null
   stemJob.value = null
+  voiceJob.value = null
   audioLength.value = null
   form.value = defaultFormState()
   presetName.value = ''
@@ -352,6 +397,38 @@ async function convert(): Promise<void> {
             <path d="M2 12h2l2-6 3 12 3-14 3 16 3-10 2 2h2" />
           </svg>
         </button>
+        <button
+          v-if="voice"
+          type="button"
+          class="icon-button"
+          :title="t('voicesManageTitle')"
+          :aria-label="t('voicesManage')"
+          @click="openVoices"
+        >
+          <!-- A microphone: the collection of voices. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0" />
+            <line x1="12" y1="18" x2="12" y2="21" />
+          </svg>
+        </button>
+        <button
+          v-if="voice"
+          type="button"
+          class="icon-button"
+          :title="t('voiceJobsManageTitle')"
+          :aria-label="t('voiceJobsManage')"
+          @click="openVoiceJobs"
+        >
+          <!-- A microphone in a list: the jobs of the voice service. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="4" y1="7" x2="13" y2="7" />
+            <line x1="4" y1="12" x2="11" y2="12" />
+            <line x1="4" y1="17" x2="13" y2="17" />
+            <circle cx="18" cy="12" r="3" />
+            <line x1="18" y1="15" x2="18" y2="19" />
+          </svg>
+        </button>
       </div>
       <button type="button" class="button secondary small" :title="t('resetTitle')" @click="reset">{{ t('reset') }}</button>
       <div class="locale" role="group" aria-label="Language">
@@ -400,6 +477,18 @@ async function convert(): Promise<void> {
           v-model:job="stemJob"
           v-model:running="stemsRunning"
           v-model:tracked="stemTracked"
+          :audio="audio"
+          :output-name="outputName"
+          @export-logic="exportLogic"
+        />
+        <VoicePanel
+          v-if="voice"
+          ref="voicePanel"
+          v-model:job="voiceJob"
+          v-model:running="voiceRunning"
+          v-model:tracked="voiceTracked"
+          :voices="voices"
+          :stem-job="stemJob"
           :audio="audio"
           :output-name="outputName"
           @export-logic="exportLogic"
@@ -464,6 +553,8 @@ async function convert(): Promise<void> {
       :has-audio="audio !== null"
       :stems-running="stemsRunning"
       :stems-ready="stemJob !== null"
+      :voice-running="voiceRunning"
+      :voice-ready="voiceJob !== null"
       :logic-busy="logicBusy"
       :logic-error="logicError"
       :logic-warnings="logicWarnings"
@@ -472,6 +563,8 @@ async function convert(): Promise<void> {
 
     <InstrumentDialog ref="instrumentDialog" :instruments="instruments" @changed="instrumentsChanged" />
     <StemServiceDialog v-if="stems" ref="stemServiceDialog" :own-job="stemTracked" @deleted="stemJobDeleted" />
+    <VoiceDialog v-if="voice" ref="voiceDialog" :voices="voices" @changed="voices = $event" />
+    <VoiceJobsDialog v-if="voice" ref="voiceJobsDialog" :own-job="voiceTracked" @deleted="voiceJobDeleted" />
   </main>
 </template>
 

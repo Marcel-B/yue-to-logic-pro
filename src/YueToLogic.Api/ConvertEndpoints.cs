@@ -6,6 +6,7 @@ using YueToLogic.Core.Diagnostics;
 using YueToLogic.Core.Logic;
 using YueToLogic.Core.Serialization;
 using YueToLogic.Core.Stems;
+using YueToLogic.Core.Voices;
 
 namespace YueToLogic.Api;
 
@@ -51,7 +52,7 @@ public static class ConvertEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(MaxAudioBytes + MaxScoreBytes + 64 * 1024))
             .WithFormOptions(multipartBodyLengthLimit: MaxAudioBytes + MaxScoreBytes)
             .WithName("ConvertToLogic")
-            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section, 'stemJob' puts the stems of a finished separation on their own audio tracks, 'instruments' (JSON: track name → name, port, channel) puts each track on its instrument's channel and names it after both.");
+            .WithSummary("Converts a score.abc, optionally with its audio.flac, into a zipped Logic Pro project. The form field 'splitSections' gives every track one region per song section, 'stemJob' puts the stems of a finished separation on their own audio tracks, 'voiceJob' puts the converted vocals of a finished voice job on the vocals track instead of the separated ones, 'instruments' (JSON: track name → name, port, channel) puts each track on its instrument's channel and names it after both.");
 
         return api;
     }
@@ -63,6 +64,7 @@ public static class ConvertEndpoints
         [FromForm] string? name,
         [FromForm] bool? splitSections,
         [FromForm] Guid? stemJob,
+        [FromForm] string? voiceJob,
         [FromForm] string? instruments,
         IScoreConverter converter,
         ILogicProjectWriter writer,
@@ -110,6 +112,13 @@ public static class ConvertEndpoints
             ? await StemImport.FetchAsync(stemService, job, cancellationToken)
             : null;
 
+        // A changed voice replaces the separated vocals on the project's vocals track; the dry ones, if the
+        // separation made them, stay on theirs, so the original performance is still in the project.
+        var voiceService = services.GetService<IVoiceConversionService>();
+        await using var voice = string.IsNullOrWhiteSpace(voiceJob)
+            ? null
+            : await VoiceImport.FetchAsync(voiceService, voiceJob, cancellationToken);
+
         LogicProjectResult logic;
         try
         {
@@ -123,7 +132,7 @@ public static class ConvertEndpoints
                     Channels = parsed.MidiChannels,
                     Instruments = logicInstruments,
                 };
-                var logicAudio = new LogicAudio(audioStream, stems?.Vocals, stems?.VocalsDry);
+                var logicAudio = new LogicAudio(audioStream, voice?.Vocals ?? stems?.Vocals, stems?.VocalsDry);
                 logic = await writer.WriteAsync(result.Score!, logicAudio, sink, logicOptions, cancellationToken);
             }
         }
@@ -139,8 +148,20 @@ public static class ConvertEndpoints
             await stemService.DeleteAsync(imported, cancellationToken).ConfigureAwait(false);
         }
 
+        // The same for the converted vocals; a job whose result Logic could not take keeps it, so that it can
+        // still be downloaded by hand.
+        if (logic.Success && voice?.HasVocals == true && voiceService is not null)
+        {
+            await voiceService.DeleteJobAsync(voiceJob!, cancellationToken).ConfigureAwait(false);
+        }
+
         IReadOnlyList<Diagnostic> diagnostics =
-            [.. result.Diagnostics, .. logic.Diagnostics, .. stems?.Problem is { } stemProblem ? new[] { stemProblem } : []];
+        [
+            .. result.Diagnostics,
+            .. logic.Diagnostics,
+            .. stems?.Problem is { } stemProblem ? new[] { stemProblem } : [],
+            .. voice?.Problem is { } voiceProblem ? new[] { voiceProblem } : [],
+        ];
         if (!logic.Success)
         {
             await zip.DisposeAsync();

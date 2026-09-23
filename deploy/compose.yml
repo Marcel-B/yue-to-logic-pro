@@ -19,6 +19,9 @@ services:
       # StemMyWav, which separates a recording into stems. Without both values the app offers no stems.
       Stems__BaseUrl: ${STEMS_BASE_URL:-}
       Stems__ApiKey: ${STEMS_API_KEY:-}
+      # ChangeMyVoice, which gives a vocal track another voice. Without both values the app offers no voices.
+      Voice__BaseUrl: ${VOICE_BASE_URL:-}
+      Voice__ApiKey: ${VOICE_API_KEY:-}
       # The instrument library, a SQLite file in the volume below.
       Data__Path: /data/yue-to-logic.db
       TZ: ${TZ:-Europe/Berlin}

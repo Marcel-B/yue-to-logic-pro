@@ -6,8 +6,11 @@ import type {
   Instrument,
   InstrumentInput,
   LogicInstrument,
+  ReferenceVoice,
   SeparationModel,
   StemJob,
+  VoiceJob,
+  VoiceJobPage,
 } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? ''
@@ -73,6 +76,8 @@ export async function exportLogicProject(
   splitSections: boolean,
   /** A finished stem job, whose stems the server then puts on the project's own audio tracks. */
   stemJob: string | null,
+  /** A finished voice job, whose converted vocals then take the project's vocals track. */
+  voiceJob: string | null,
   /** The instrument each track plays; the track then sits on its channel and is named after it. */
   instruments: Record<string, LogicInstrument> = {},
   signal?: AbortSignal,
@@ -87,6 +92,9 @@ export async function exportLogicProject(
   form.append('splitSections', String(splitSections))
   if (stemJob) {
     form.append('stemJob', stemJob)
+  }
+  if (voiceJob) {
+    form.append('voiceJob', voiceJob)
   }
   if (Object.keys(instruments).length > 0) {
     form.append('instruments', JSON.stringify(instruments))
@@ -178,6 +186,85 @@ export async function listStemJobs(signal?: AbortSignal): Promise<StemJob[]> {
  */
 export async function deleteStemJob(id: string): Promise<void> {
   await request(`/api/stems/${id}`, { method: 'DELETE' })
+}
+
+// ---- Voices ------------------------------------------------------------------------------------
+
+/** Whether this server can have a voice changed at all. */
+export async function voiceAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch(`${apiBase}/api/voice`)
+    return response.ok && ((await response.json()) as { available: boolean }).available
+  } catch {
+    return false
+  }
+}
+
+/** The collection of reference voices; one of them is what a conversion takes its timbre from. */
+export async function listVoices(signal?: AbortSignal): Promise<ReferenceVoice[]> {
+  return (await request('/api/voice/voices', { signal })).json() as Promise<ReferenceVoice[]>
+}
+
+/** Stores a recording under a name; the service keeps the first 25 seconds, which is all the model uses. */
+export async function addVoice(label: string, file: File): Promise<ReferenceVoice> {
+  const form = new FormData()
+  form.append('label', label)
+  form.append('file', file)
+  return (await request('/api/voice/voices', { method: 'POST', body: form })).json() as Promise<ReferenceVoice>
+}
+
+/** Removes a reference voice; the service refuses while a job still waits for it (409). */
+export async function deleteVoice(id: string): Promise<void> {
+  await request(`/api/voice/voices/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/**
+ * Converts the vocals of a finished separation to a reference voice. The audio stays on the servers: the
+ * browser passes the two ids, the vocal stem travels from the stem service to this one and on.
+ */
+export async function startVoiceJob(stemJob: string, voiceId: string, signal?: AbortSignal): Promise<VoiceJob> {
+  const form = new FormData()
+  form.append('stemJob', stemJob)
+  form.append('voiceId', voiceId)
+  return (await request('/api/voice/jobs', { method: 'POST', body: form, signal })).json() as Promise<VoiceJob>
+}
+
+export async function voiceJobStatus(id: string, signal?: AbortSignal): Promise<VoiceJob> {
+  return (await request(`/api/voice/jobs/${encodeURIComponent(id)}`, { signal })).json() as Promise<VoiceJob>
+}
+
+/** The converted recording as a WAV, for whoever wants it beside the project. */
+export async function downloadVoiceResult(id: string): Promise<Blob> {
+  return (await request(`/api/voice/jobs/${encodeURIComponent(id)}/result`)).blob()
+}
+
+/**
+ * A page of the voice service's jobs, newest first. A service without that route answers 501, which the
+ * interface shows as "this one cannot list its jobs" rather than as an empty list.
+ *
+ * @param status Only jobs in that state, or an empty string for all of them.
+ */
+export async function listVoiceJobs(
+  limit: number,
+  offset: number,
+  status = '',
+  signal?: AbortSignal,
+): Promise<VoiceJobPage> {
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (status) {
+    query.set('status', status)
+  }
+  return (await request(`/api/voice/jobs?${query}`, { signal })).json() as Promise<VoiceJobPage>
+}
+
+/** Cancels a job or drops a finished one's result. Failure is not worth reporting when nobody asked. */
+export async function forgetVoiceJob(id: string): Promise<void> {
+  await request(`/api/voice/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => undefined)
+}
+
+/** The same call where the user asked for it, so a refusal is worth showing. */
+export async function deleteVoiceJob(id: string): Promise<void> {
+  await request(`/api/voice/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // ---- Presets -----------------------------------------------------------------------------------

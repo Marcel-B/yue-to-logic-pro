@@ -3,6 +3,7 @@ using YueToLogic.Api.Data;
 using YueToLogic.Api.Instruments;
 using YueToLogic.Api.Presets;
 using YueToLogic.Core.Stems;
+using YueToLogic.Core.Voices;
 
 const string CorsPolicy = "ConfiguredOrigins";
 
@@ -40,6 +41,19 @@ if (Uri.TryCreate(stems["BaseUrl"], UriKind.Absolute, out var stemService) && !s
         client.Timeout = TimeSpan.FromMinutes(10);
     });
 }
+// Changing a voice is optional in the same way: without an address and a key the endpoints answer that this
+// server has none, and the interface leaves the whole section out.
+var voice = builder.Configuration.GetSection("Voice");
+if (Uri.TryCreate(voice["BaseUrl"], UriKind.Absolute, out var voiceService) && !string.IsNullOrWhiteSpace(voice["ApiKey"]))
+{
+    builder.Services.AddHttpClient<IVoiceConversionService, VoiceConversionService>(client =>
+    {
+        client.BaseAddress = voiceService;
+        client.DefaultRequestHeaders.Add("X-Api-Key", voice["ApiKey"]);
+        // A conversion runs for minutes, but every call here only starts, asks or fetches.
+        client.Timeout = TimeSpan.FromMinutes(10);
+    });
+}
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
@@ -67,6 +81,7 @@ var api = app.MapGroup("/api");
 api.MapMethods("/health", ClientAppEndpoints.GetAndHead, () => Results.Text("ok"));
 api.MapConvertEndpoints();
 api.MapStemEndpoints();
+api.MapVoiceEndpoints();
 api.MapInstrumentEndpoints();
 api.MapPresetEndpoints();
 

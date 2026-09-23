@@ -16,6 +16,10 @@ const props = defineProps<{
   stemsRunning: boolean
   /** A finished separation is waiting; the next project takes its stems along. */
   stemsReady: boolean
+  /** A voice conversion is still running, so a project written now would keep the separated vocals. */
+  voiceRunning: boolean
+  /** A finished conversion is waiting; its vocals take the next project's vocals track. */
+  voiceReady: boolean
 }>()
 
 /** What the button says: that a separation is still running is worth knowing before clicking it. */
@@ -27,6 +31,13 @@ const logicLabel = computed(() => {
 })
 
 const logicNote = computed(() => {
+  // The changed voice is what the vocals track ends up with, so it is named before the separation.
+  if (props.voiceRunning) {
+    return t('logicVoiceRunning')
+  }
+  if (props.voiceReady) {
+    return t('logicVoiceReady')
+  }
   if (props.stemsRunning) {
     return t('logicStemsRunning')
   }
