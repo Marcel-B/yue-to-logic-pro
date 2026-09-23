@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Converts the `score.abc` that YuE2 writes next to its `audio.flac` into a Standard MIDI File and, together with the audio, into a Logic Pro project (`.logicx`). Three hosts share one library: a CLI (`yue2logic`), an ASP.NET Core API with a Vue frontend under `/ui`, and a container image built by CI. README.md (English) and README.de.md (German) are the user documentation; both carry the same sections and are updated together.
+Converts the `score.abc` that YuE2 writes next to its `audio.flac` into a Standard MIDI File and, together with the audio, into a Logic Pro project (`.logicx`) - and a MIDI file edited in Logic back into a `score.abc` for YuE2. Three hosts share one library: a CLI (`yue2logic`), an ASP.NET Core API with a Vue frontend under `/ui`, and a container image built by CI. README.md (English) and README.de.md (German) are the user documentation; both carry the same sections and are updated together.
 
 ## Commands
 
@@ -52,6 +52,10 @@ No console, no file system, no logging. Input is a `string`/`Stream`, output `by
 5. `MidiRenderer` (`Midi/`, DryWetMidi) – type 1 SMF: conductor track, one track per voice, chords, accompaniment; drums on channel 10.
 
 `VoiceTrack.Kind` (`Melody`, `Chords`, `Bass`, `Drums`, `GuideTones`, `Doubling`) is how later stages and the Logic writer tell generated tracks apart. Track names (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`, `Kick`…) are the key for MIDI channels, programs, instruments and Logic template tracks alike.
+
+### The way back: MIDI to ABC
+
+`MidiToAbcConverter` (`Conversion/`) reverses the pipeline for a MIDI file that came back from Logic: `MidiFileReader` (`Midi/`, pairs notes itself) → track roles by name (`Vocal`, `Ins`, `Chords`; Logic's "Part · Instrument" header is cut at the dot; generated tracks and channel 10 are ignored; unnamed files by sound and order) → sixteenth grid → one note at a time per voice → `ChordTrackReader`/`ChordRecognizer` (`Harmony/`) read the chord track back into symbols → leading silent bars dropped → a `ScoreDocument` → `AbcScoreWriter` (`Abc/`). The writer lays the score out exactly as YuE2 does; `AbcScoreWriterTests` and `MidiToAbcConverterTests` hold it to that with character-for-character round trips of `samples/score.abc` (also through MIDI with every arrangement option) and of the template song. The chord recognizer's scoring and its rules for inversion vs. slash chord are documented in its `<remarks>`; change them against the exhaustive voicing tests. Track indices in `MidiToAbcOptions.TrackRoles` are 0-based; the CLI's `--track` counts from 1.
 
 ### Logic Pro project writer (`Core/Logic`)
 

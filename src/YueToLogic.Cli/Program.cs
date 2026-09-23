@@ -31,6 +31,11 @@ var midiPath = Path.GetFullPath(options.OutputPath is null
     ? Path.ChangeExtension(inputPath, ".mid")
     : EnsureExtension(options.OutputPath, ".mid", ".midi"));
 var jsonPath = options.JsonPath is null ? null : Path.GetFullPath(EnsureExtension(options.JsonPath, ".json"));
+if (options.IsMidiInput)
+{
+    return await ConvertMidiAsync();
+}
+
 var logicAudioPath = options.LogicAudioPath is null ? null : Path.GetFullPath(options.LogicAudioPath);
 var logicPath = options.WriteLogicProject ? Path.ChangeExtension(midiPath, ".logicx") : null;
 
@@ -119,6 +124,90 @@ if (logicPath is not null && !await TryWriteLogicProjectAsync(result.Score!, log
 
 PrintSummary(result.Score!);
 return ExitSuccess;
+
+// The way back: a MIDI file, e.g. exported from Logic after editing the project, becomes a score.abc again.
+async Task<int> ConvertMidiAsync()
+{
+    var abcPath = Path.GetFullPath(options.OutputPath is null
+        ? Path.ChangeExtension(inputPath, ".abc")
+        : EnsureExtension(options.OutputPath, ".abc"));
+    if (!File.Exists(inputPath))
+    {
+        Console.Error.WriteLine(text.Format(text.InputNotFound, inputPath));
+        return ExitUsageOrIoError;
+    }
+
+    foreach (var path in new[] { abcPath, jsonPath })
+    {
+        if (path is not null && File.Exists(path) && !options.Force)
+        {
+            Console.Error.WriteLine(text.Format(text.OutputExists, path));
+            return ExitUsageOrIoError;
+        }
+    }
+
+    byte[] midi;
+    try
+    {
+        midi = await File.ReadAllBytesAsync(inputPath);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine(text.Format(text.ReadFailed, inputPath, ex.Message));
+        return ExitUsageOrIoError;
+    }
+
+    var back = new MidiToAbcConverter().Convert(midi, new MidiToAbcOptions { TrackRoles = options.TrackRoles, SkipBars = options.SkipBars });
+    PrintDiagnostics(back.Diagnostics);
+    if (jsonPath is not null)
+    {
+        var json = JsonSerializer.Serialize(back, YueToLogicJsonContext.Default.MidiToAbcResult);
+        if (!await TryWriteAsync(jsonPath, () => File.WriteAllTextAsync(jsonPath, json)))
+        {
+            return ExitUsageOrIoError;
+        }
+    }
+
+    // The tracks are worth seeing on failure too: they are what --track refers to.
+    var tracks = string.Join(" | ", back.Tracks.Select(t => text.Format(
+        text.TrackValue,
+        t.Index + 1,
+        t.Name,
+        t.Role == MidiTrackRole.Ignore ? text.RoleIgnored : t.Role.ToString())));
+    if (!back.Success)
+    {
+        if (back.Tracks.Count > 0)
+        {
+            WriteRow(text.LabelTracks, tracks);
+        }
+
+        Console.Error.WriteLine(text.MidiConversionFailed);
+        return ExitConversionFailed;
+    }
+
+    if (!await TryWriteAsync(abcPath, () => File.WriteAllTextAsync(abcPath, back.Abc!)))
+    {
+        return ExitUsageOrIoError;
+    }
+
+    var score = back.Score!;
+    WriteRow(text.LabelInput, inputPath);
+    WriteRow(text.LabelTempo, text.Format("{0:0.##} BPM", score.TempoBpm));
+    WriteRow(text.LabelMeter, string.Join(", ", score.TimeSignatures.Select(t => $"{t.Numerator}/{t.Denominator}")));
+    WriteRow(text.LabelKey, string.Join(", ", score.KeySignatures.Select(k => k.Key)));
+    WriteRow(text.LabelLength, text.Format(text.LengthValue, score.GetBarPosition(score.LengthTicks).Bar - 1, score.DurationSeconds));
+    WriteRow(text.LabelSections, score.Sections.Count == 0
+        ? text.None
+        : string.Join(", ", score.Sections.Select(s => text.Format(text.SectionValue, s.Name, score.GetBarPosition(s.StartTicks).Bar))));
+    WriteRow(text.LabelTracks, tracks);
+    WriteRow(text.LabelAbc, abcPath);
+    if (jsonPath is not null)
+    {
+        WriteRow(text.LabelJson, jsonPath);
+    }
+
+    return ExitSuccess;
+}
 
 async Task<bool> TryWriteLogicProjectAsync(ScoreDocument score, string? audioPath, string packagePath, string? vocalsPath, string? vocalsDryPath)
 {

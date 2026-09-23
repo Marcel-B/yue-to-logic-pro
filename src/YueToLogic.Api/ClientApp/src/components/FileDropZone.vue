@@ -7,8 +7,8 @@ const props = defineProps<{
   file: File | null
   /** Whether a whole YuE output folder can be dropped here, which fills score and audio at once. */
   folders?: boolean
-  /** Expected file extension, e.g. ".abc"; other files are accepted but flagged. */
-  extension: string
+  /** Expected file extension, e.g. ".abc", or several; other files are accepted but flagged. */
+  extension: string | string[]
   accept: string
   dropHint: string
   wrongTypeHint: string
@@ -19,7 +19,10 @@ const input = ref<HTMLInputElement | null>(null)
 const folderInput = ref<HTMLInputElement | null>(null)
 const dragDepth = ref(0)
 const dragging = computed(() => dragDepth.value > 0)
-const expectedType = computed(() => !props.file || props.file.name.toLowerCase().endsWith(props.extension))
+const expectedType = computed(() => {
+  const name = props.file?.name.toLowerCase()
+  return !name || [props.extension].flat().some((extension) => name.endsWith(extension))
+})
 
 function openDialog(): void {
   input.value?.click()

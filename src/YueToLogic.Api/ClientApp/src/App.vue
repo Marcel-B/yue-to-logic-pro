@@ -13,6 +13,7 @@ import {
   voiceAvailable,
 } from './api'
 import InstrumentDialog from './components/InstrumentDialog.vue'
+import MidiToAbcPanel from './components/MidiToAbcPanel.vue'
 import OptionsForm from './components/OptionsForm.vue'
 import ResultView from './components/ResultView.vue'
 import ScorePreview from './components/ScorePreview.vue'
@@ -72,6 +73,7 @@ const voiceRunning = ref(false)
 /** The job the voice panel is about, running or finished; the job dialog marks it as this session's. */
 const voiceTracked = ref<string | null>(null)
 const voicePanel = useTemplateRef<InstanceType<typeof VoicePanel>>('voicePanel')
+const midiPanel = useTemplateRef<InstanceType<typeof MidiToAbcPanel>>('midiPanel')
 const voiceDialog = useTemplateRef<InstanceType<typeof VoiceDialog>>('voiceDialog')
 const voiceJobsDialog = useTemplateRef<InstanceType<typeof VoiceJobsDialog>>('voiceJobsDialog')
 void voiceAvailable().then(async (available) => {
@@ -319,6 +321,7 @@ function reset(): void {
   busy.value = false
   // Before the jobs are let go of below: the panel still knows its running one, and its own WAV goes too.
   voicePanel.value?.clear()
+  midiPanel.value?.clear()
   file.value = null
   audio.value = null
   folderNote.value = null
@@ -572,6 +575,9 @@ async function convert(): Promise<void> {
       :logic-warnings="logicWarnings"
       @export-logic="exportLogic"
     />
+
+    <!-- The way back, after the song has been edited in Logic; it stands on its own and needs nothing above. -->
+    <MidiToAbcPanel ref="midiPanel" />
 
     <InstrumentDialog ref="instrumentDialog" :instruments="instruments" @changed="instrumentsChanged" />
     <StemServiceDialog v-if="stems" ref="stemServiceDialog" :own-job="stemTracked" @deleted="stemJobDeleted" />

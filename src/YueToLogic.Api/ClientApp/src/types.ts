@@ -118,6 +118,39 @@ export interface ConversionOptions {
   midiPrograms: Record<string, number>
 }
 
+/** What a track of a MIDI file becomes in the score.abc (MidiTrackRole in the core library). */
+export type MidiTrackRole = 'Ignore' | 'Vocal' | 'Ins' | 'Chords'
+
+/** A track of a MIDI file on the way back: a track, or one channel of a track that plays on several. */
+export interface MidiTrackInfo {
+  /** What `MidiToAbcOptions.trackRoles` refers to it by. */
+  index: number
+  name: string
+  /** 1-16. */
+  channel: number
+  noteCount: number
+  /** Whether it mostly strikes several notes at once, as a chord track does. */
+  polyphonic: boolean
+  role: MidiTrackRole
+}
+
+export interface MidiToAbcOptions {
+  /** Role per track index; tracks without an entry keep the role their name suggests. */
+  trackRoles: Record<number, MidiTrackRole>
+  /** Bars left out at the start; null leaves out the silent ones (a count-in). */
+  skipBars: number | null
+}
+
+export interface MidiToAbcResult {
+  success: boolean
+  /** The score.abc for YuE2. */
+  abc: string | null
+  score: ScoreDocument | null
+  /** Every track with notes, also when conversion failed, so the roles can be chosen by hand. */
+  tracks: MidiTrackInfo[]
+  diagnostics: Diagnostic[]
+}
+
 /** A stem separation job as the backend reports it. */
 export interface StemJob {
   id: string

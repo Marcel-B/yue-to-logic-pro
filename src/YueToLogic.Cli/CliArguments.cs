@@ -104,6 +104,31 @@ internal sealed record CliArguments
 
     public bool ShowHelp { get; init; }
 
+    /// <summary>Whether the input is a MIDI file to turn back into a score.abc, told by its extension.</summary>
+    public bool IsMidiInput => MidiExtensions.Contains(Path.GetExtension(InputPath), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Role per track of a MIDI input, by index (0-based; <c>--track</c> counts from 1, as the summary lists them).</summary>
+    public Dictionary<int, MidiTrackRole> TrackRoles { get; init; } = [];
+
+    /// <summary>Bars left out at the start of a MIDI input; <c>null</c> leaves out the silent ones.</summary>
+    public int? SkipBars { get; init; }
+
+    private static readonly string[] MidiExtensions = [".mid", ".midi"];
+
+    /// <summary>Options that mean the same in both directions.</summary>
+    private static readonly HashSet<string> SharedOptions = ["-h", "--help", "-o", "--output", "--dump-json", "-f", "--force", "-v", "--verbose"];
+
+    /// <summary>Options of the way back, from a MIDI file to a score.abc.</summary>
+    private static readonly HashSet<string> MidiOptions = ["--track", "--skip-bars"];
+
+    private static readonly Dictionary<string, MidiTrackRole> Roles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["vocal"] = MidiTrackRole.Vocal,
+        ["ins"] = MidiTrackRole.Ins,
+        ["chords"] = MidiTrackRole.Chords,
+        ["ignore"] = MidiTrackRole.Ignore,
+    };
+
     /// <returns><c>false</c> with an <paramref name="error"/> message if the arguments are invalid.</returns>
     public static bool TryParse(string[] args, CliText text, out CliArguments result, out string? error)
     {
@@ -111,9 +136,25 @@ internal sealed record CliArguments
         error = null;
         string? input = null;
 
+        // The first option that belongs to one direction only, to refuse it for an input of the other kind.
+        string? scoreOption = null;
+        string? midiOption = null;
+
         for (var i = 0; i < args.Length; i++)
         {
             var arg = args[i];
+            if (arg.Length > 1 && arg.StartsWith('-') && !SharedOptions.Contains(arg))
+            {
+                if (MidiOptions.Contains(arg))
+                {
+                    midiOption ??= arg;
+                }
+                else
+                {
+                    scoreOption ??= arg;
+                }
+            }
+
             switch (arg)
             {
                 case "-h" or "--help":
@@ -382,6 +423,38 @@ internal sealed record CliArguments
                 case "--fit-tempo":
                     result = result with { FitTempo = true };
                     break;
+                case "--track":
+                    if (!TryTakeValue(args, ref i, text, out var trackText, out error))
+                    {
+                        return false;
+                    }
+
+                    var roleAt = trackText.LastIndexOf('=');
+                    if (roleAt <= 0
+                        || !int.TryParse(trackText.AsSpan(0, roleAt), NumberStyles.None, CultureInfo.InvariantCulture, out var track)
+                        || track < 1
+                        || !Roles.TryGetValue(trackText[(roleAt + 1)..], out var role))
+                    {
+                        error = text.Format(text.InvalidTrackRole, trackText, string.Join(", ", Roles.Keys));
+                        return false;
+                    }
+
+                    result.TrackRoles[track - 1] = role;
+                    break;
+                case "--skip-bars":
+                    if (!TryTakeValue(args, ref i, text, out var skipText, out error))
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(skipText, NumberStyles.None, CultureInfo.InvariantCulture, out var skip) || skip > MidiToAbcOptions.MaxSkipBars)
+                    {
+                        error = text.Format(text.InvalidSkipBars, skipText, MidiToAbcOptions.MaxSkipBars);
+                        return false;
+                    }
+
+                    result = result with { SkipBars = skip };
+                    break;
                 case "-f" or "--force":
                     result = result with { Force = true };
                     break;
@@ -412,13 +485,25 @@ internal sealed record CliArguments
             return false;
         }
 
+        result = result with { InputPath = input };
+        if (result.IsMidiInput && scoreOption is not null)
+        {
+            error = text.Format(text.NotForMidiInput, scoreOption);
+            return false;
+        }
+
+        if (!result.IsMidiInput && midiOption is not null)
+        {
+            error = text.Format(text.OnlyForMidiInput, midiOption);
+            return false;
+        }
+
         if (result.FitTempo && result.LogicAudioPath is null)
         {
             error = text.FitTempoNeedsAudio;
             return false;
         }
 
-        result = result with { InputPath = input };
         return true;
     }
 
