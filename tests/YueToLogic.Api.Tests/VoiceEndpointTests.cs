@@ -84,6 +84,41 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
         Assert.Equal("dry vocals", voice.Source);
     }
 
+    /// <summary>
+    /// Vocals the user brings along need no separation: the WAV goes to the service as it came, under its own
+    /// name, and a server without a stem service takes it just the same.
+    /// </summary>
+    [Fact]
+    public async Task A_job_takes_a_wav_of_vocals_without_a_separation()
+    {
+        var voice = new FakeVoice();
+
+        var response = await Client(voice).PostAsync("/api/voice/jobs", WavForm("v1", "RIFF\0\0\0\0WAVEmy vocals", "Take 3.wav"));
+        var job = await response.Content.ReadFromJsonAsync<VoiceJob>();
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal(JobId, job!.Id);
+        Assert.Equal(("v1", "RIFF\0\0\0\0WAVEmy vocals", "Take 3.wav"), (voice.VoiceId, voice.Source, voice.FileName));
+    }
+
+    [Fact]
+    public async Task A_wav_is_refused_when_it_is_none_or_comes_with_a_separation()
+    {
+        var voice = new FakeVoice();
+        var client = Client(voice, new FakeStems());
+
+        var notWav = await client.PostAsync("/api/voice/jobs", WavForm("v1", "fLaC and more bytes", "vocals.wav"));
+        var empty = await client.PostAsync("/api/voice/jobs", WavForm("v1", string.Empty, "vocals.wav"));
+        var both = WavForm("v1", "RIFF\0\0\0\0WAVEmy vocals", "vocals.wav");
+        both.Add(new StringContent(StemJob.ToString()), "stemJob");
+        var twoSources = await client.PostAsync("/api/voice/jobs", both);
+
+        Assert.Equal(HttpStatusCode.BadRequest, notWav.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, twoSources.StatusCode);
+        Assert.Null(voice.Source);
+    }
+
     [Fact]
     public async Task Without_a_finished_separation_there_is_nothing_to_convert()
     {
@@ -222,6 +257,13 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
         return new MultipartFormDataContent { { new StringContent(label), "label" }, { file, "file", "voice.wav" } };
     }
 
+    private static MultipartFormDataContent WavForm(string voiceId, string content, string fileName)
+    {
+        var file = new ByteArrayContent(Encoding.UTF8.GetBytes(content));
+        file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+        return new MultipartFormDataContent { { new StringContent(voiceId), "voiceId" }, { file, "file", fileName } };
+    }
+
     private static MultipartFormDataContent JobForm(string? voiceId, Guid? stemJob)
     {
         var form = new MultipartFormDataContent();
@@ -263,6 +305,8 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
 
         public string? Source { get; private set; }
 
+        public string? FileName { get; private set; }
+
         public string? DeletedVoice { get; private set; }
 
         public string? DeletedJob { get; private set; }
@@ -298,6 +342,7 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
             CancellationToken cancellationToken = default)
         {
             VoiceId = voiceId;
+            FileName = fileName;
             Source = await new StreamReader(vocals).ReadToEndAsync(cancellationToken);
             return Failure is null ? new VoiceJob(JobId, VoiceJobStatus.Queued, voiceId) : throw Failure;
         }

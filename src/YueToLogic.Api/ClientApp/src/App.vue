@@ -308,6 +308,8 @@ function reset(): void {
   pending?.abort()
   pending = null
   busy.value = false
+  // Before the jobs are let go of below: the panel still knows its running one, and its own WAV goes too.
+  voicePanel.value?.clear()
   file.value = null
   audio.value = null
   folderNote.value = null
@@ -488,7 +490,9 @@ async function convert(): Promise<void> {
           v-model:tracked="voiceTracked"
           :voices="voices"
           :stem-job="stemJob"
+          :stems="stems"
           :audio="audio"
+          :can-export="file !== null"
           :output-name="outputName"
           @export-logic="exportLogic"
         />

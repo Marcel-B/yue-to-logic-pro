@@ -13,15 +13,22 @@ namespace YueToLogic.Api;
 /// </summary>
 /// <remarks>
 /// Two things live at the service: the collection of reference voices, which is edited here like the
-/// instrument library, and the jobs. A job's source is the vocal stem of a finished separation, which travels
-/// from the stem service to this server and on to the voice service without the detour through the browser -
-/// the browser passes the stem job's id, no audio. ChangeMyVoice has no interface of its own, so the list of
+/// instrument library, and the jobs. A job's source is either the vocal stem of a finished separation, which
+/// travels from the stem service to this server and on to the voice service without the detour through the
+/// browser - the browser passes the stem job's id, no audio - or a WAV of vocals the user brings along, for
+/// which no separation has to run first. ChangeMyVoice has no interface of its own, so the list of
 /// jobs is passed through as well; a service that cannot list them answers 501 here and the interface says so.
 /// </remarks>
 public static class VoiceEndpoints
 {
     /// <summary>A reference voice is a few seconds of singing; the service keeps only the first 25 anyway.</summary>
     public const long MaxVoiceBytes = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// Vocals brought along as a WAV are a whole song, uncompressed: at 48 kHz, 24 bit, stereo a minute is
+    /// about 17 MB, so this leaves room for long takes and 32-bit float files.
+    /// </summary>
+    public const long MaxVocalsBytes = 512L * 1024 * 1024;
 
     public static RouteGroupBuilder MapVoiceEndpoints(this RouteGroupBuilder api)
     {
@@ -48,8 +55,10 @@ public static class VoiceEndpoints
 
         voice.MapPost("/jobs", StartJobAsync)
             .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(MaxVocalsBytes + 64 * 1024))
+            .WithFormOptions(multipartBodyLengthLimit: MaxVocalsBytes)
             .WithName("StartVoiceJob")
-            .WithSummary("Converts the vocals of a finished stem job to a reference voice; the form fields are 'voiceId' and 'stemJob'.");
+            .WithSummary("Converts vocals to a reference voice; the form fields are 'voiceId' and either 'stemJob' (a finished separation, whose vocals are taken) or 'file' (a WAV of vocals).");
 
         voice.MapGet("/jobs", ListJobsAsync)
             .WithName("VoiceJobs")
@@ -147,11 +156,12 @@ public static class VoiceEndpoints
     }
 
     /// <summary>
-    /// Starts a conversion from the vocals of a finished separation. The dry vocals are preferred when the
-    /// separation produced them: the model copies what it hears, and a hall that is sung along with stays in
-    /// the result.
+    /// Starts a conversion from the vocals of a finished separation or from a WAV that was sent along. Of a
+    /// separation the dry vocals are preferred when it produced them: the model copies what it hears, and a
+    /// hall that is sung along with stays in the result. A WAV is taken as it is; it needs no stem service.
     /// </summary>
     private static async Task<IResult> StartJobAsync(
+        IFormFile? file,
         [FromForm] string? voiceId,
         [FromForm] Guid? stemJob,
         IServiceProvider services,
@@ -167,9 +177,20 @@ public static class VoiceEndpoints
             return BadRequest("Missing voice", "Send the id of the reference voice as form field 'voiceId'.");
         }
 
+        if (file is not null && stemJob is not null)
+        {
+            // Two sources would leave it to chance which one is converted; the caller has to say.
+            return BadRequest("Two sources of vocals", "Send either a stem job as 'stemJob' or a WAV as 'file', not both.");
+        }
+
+        if (file is not null)
+        {
+            return await StartFromFileAsync(service, file, voiceId, cancellationToken).ConfigureAwait(false);
+        }
+
         if (stemJob is not { } separation)
         {
-            return BadRequest("Missing vocals", "Send the id of a finished stem job as form field 'stemJob'; its vocals are what gets converted.");
+            return BadRequest("Missing vocals", "Send the id of a finished stem job as form field 'stemJob', or a WAV of vocals as form field 'file'.");
         }
 
         var stemService = services.GetService<IStemSeparationService>();
@@ -199,6 +220,57 @@ public static class VoiceEndpoints
         {
             return Failed(exception);
         }
+    }
+
+    /// <summary>
+    /// Vocals the user brings along. Only WAV is taken, although the service reads more: the result goes onto
+    /// the project's vocals track next to 48 kHz stems, and a lossy file would carry its artefacts into the
+    /// conversion. The file keeps its name, so the job list shows what was converted.
+    /// </summary>
+    private static async Task<IResult> StartFromFileAsync(
+        IVoiceConversionService service,
+        IFormFile file,
+        string voiceId,
+        CancellationToken cancellationToken)
+    {
+        if (file.Length == 0)
+        {
+            return BadRequest("Missing vocals", "The WAV sent as form field 'file' is empty.");
+        }
+
+        if (file.Length > MaxVocalsBytes)
+        {
+            return BadRequest("Vocals too large", $"The WAV may have at most {MaxVocalsBytes / (1024 * 1024)} MB.");
+        }
+
+        await using var vocals = file.OpenReadStream();
+        if (!await IsWaveAsync(vocals, cancellationToken).ConfigureAwait(false))
+        {
+            return BadRequest("Not a WAV", "The vocals have to be a WAV file (RIFF/WAVE).");
+        }
+
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(file.FileName) ? "vocals.wav" : Path.GetFileName(file.FileName);
+            var job = await service.StartJobAsync(vocals, name, voiceId, settings: null, cancellationToken).ConfigureAwait(false);
+            return Results.Json(job, YueToLogicJsonContext.Default.VoiceJob, statusCode: StatusCodes.Status202Accepted);
+        }
+        catch (VoiceConversionException exception)
+        {
+            return Failed(exception);
+        }
+    }
+
+    /// <summary>
+    /// Looks at the RIFF header rather than the file name, which says little; the stream is rewound so the
+    /// service gets the file from its first byte.
+    /// </summary>
+    private static async Task<bool> IsWaveAsync(Stream audio, CancellationToken cancellationToken)
+    {
+        var header = new byte[12];
+        var read = await audio.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+        audio.Position = 0;
+        return read == header.Length && header.AsSpan(0, 4).SequenceEqual("RIFF"u8) && header.AsSpan(8, 4).SequenceEqual("WAVE"u8);
     }
 
     private static async Task<IResult> GetJobAsync(string id, IServiceProvider services, CancellationToken cancellationToken)

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, useTemplateRef, watch } from 'vue'
-import { ApiError, downloadVoiceResult, forgetVoiceJob, startVoiceJob, voiceJobStatus } from '../api'
+import { ApiError, downloadVoiceResult, forgetVoiceJob, startVoiceJob, voiceJobStatus, type VoiceSource } from '../api'
 import { t } from '../i18n'
-import { download } from '../score'
+import { baseName, download } from '../score'
 import type { ReferenceVoice } from '../types'
+import FileDropZone from './FileDropZone.vue'
 
 const props = defineProps<{
   /** The collection to choose from; kept by the app, since the dialog edits the same list. */
@@ -13,8 +14,15 @@ const props = defineProps<{
    * vocal stem goes from the stem service to this server and on to the voice service.
    */
   stemJob: string | null
-  /** A new recording makes a running conversion meaningless, so the panel starts over with it. */
+  /** Whether this server separates stems at all; without it a WAV of one's own is the only source. */
+  stems: boolean
+  /**
+   * A new recording makes a conversion of its separated vocals meaningless, so the panel starts over with it.
+   * A WAV of one's own is not tied to it and stays.
+   */
   audio: File | null
+  /** Whether a Logic project can be written now, which needs a score; without one the result is downloaded. */
+  canExport: boolean
   /** File name of the conversion, so a downloaded WAV is named after it. */
   outputName: string
 }>()
@@ -52,6 +60,13 @@ function storedVoice(): string {
 }
 
 const voice = ref(storedVoice())
+/**
+ * Where the vocals come from. The separated ones are the default where there can be any, since that is the
+ * way from a YuE song to its project; a WAV of one's own skips the separation.
+ */
+const source = ref<'stems' | 'file'>(props.stems ? 'stems' : 'file')
+/** The vocals brought along, for the source 'file'. */
+const ownVocals = ref<File | null>(null)
 const status = ref<string | null>(null)
 const error = ref<string | null>(null)
 /** What happened to the job outside this panel, e.g. that it was removed in the job dialog. */
@@ -93,8 +108,35 @@ watch(voice, (id) => {
 
 watch(
   () => props.audio,
-  () => reset(),
+  () => {
+    if (source.value === 'stems') {
+      reset()
+    }
+  },
 )
+
+watch(
+  () => props.stems,
+  (available) => {
+    if (!available) {
+      source.value = 'file'
+    }
+  },
+)
+
+/** What a start would send, or null while the chosen source has nothing to give. */
+const vocals = computed<VoiceSource | null>(() => {
+  if (source.value === 'file') {
+    return ownVocals.value ? { file: ownVocals.value } : null
+  }
+  return props.stemJob ? { stemJob: props.stemJob } : null
+})
+
+/** Another WAV is another conversion; whatever was made from the last one goes. */
+function selectVocals(file: File | null): void {
+  reset()
+  ownVocals.value = file
+}
 
 onUnmounted(() => window.clearTimeout(timer))
 
@@ -138,15 +180,15 @@ function forget(id: string): void {
 }
 
 async function start(): Promise<void> {
-  if (!props.stemJob || !voice.value) {
+  if (!vocals.value || !voice.value) {
     return
   }
 
-  const separation = props.stemJob
+  const from = vocals.value
   reset()
   busy.value = true
   try {
-    const started = await startVoiceJob(separation, voice.value)
+    const started = await startVoiceJob(from, voice.value)
     jobId = started.id
     tracked.value = started.id
     status.value = started.status
@@ -196,15 +238,19 @@ function intoProject(): void {
   emit('exportLogic')
 }
 
-/** The converted vocals as the service sends them, for whoever wants them beside the project. */
+/**
+ * The converted vocals as the service sends them, for whoever wants them beside the project or has no
+ * project at all. A WAV of one's own gives its name to the result, so the two lie side by side.
+ */
 async function saveWav(): Promise<void> {
   if (!job.value) {
     return
   }
 
+  const name = source.value === 'file' && ownVocals.value ? `${baseName(ownVocals.value.name)}-voice` : `${props.outputName || 'score'}-vocals`
   downloading.value = true
   try {
-    download(await downloadVoiceResult(job.value), `${props.outputName || 'score'}-vocals.wav`)
+    download(await downloadVoiceResult(job.value), `${name}.wav`)
   } catch (caught) {
     fail(caught)
   } finally {
@@ -240,13 +286,42 @@ function fail(caught: unknown): void {
   window.clearTimeout(timer)
 }
 
-defineExpose({ forget })
+/** Back to a fresh start, with the WAV of one's own gone as well; for the app's reset. */
+function clear(): void {
+  reset()
+  ownVocals.value = null
+}
+
+defineExpose({ forget, clear })
 </script>
 
 <template>
   <div class="voice">
     <h3>{{ t('voiceTitle') }}</h3>
     <p class="muted intro">{{ t('voiceInfo') }}</p>
+
+    <div v-if="stems" class="sources" role="radiogroup" :aria-label="t('voiceSource')">
+      <label>
+        <input v-model="source" type="radio" value="stems" :disabled="busy" />
+        {{ t('voiceSourceStems') }}
+      </label>
+      <label>
+        <input v-model="source" type="radio" value="file" :disabled="busy" />
+        {{ t('voiceSourceFile') }}
+      </label>
+    </div>
+
+    <div v-if="source === 'file'" class="own">
+      <FileDropZone
+        :file="ownVocals"
+        extension=".wav"
+        accept=".wav,audio/wav,audio/x-wav,audio/wave"
+        :drop-hint="t('voiceDropHint')"
+        :wrong-type-hint="t('notWav')"
+        @select="selectVocals"
+        @clear="selectVocals(null)"
+      />
+    </div>
 
     <label v-if="voices.length > 0" class="field">
       <span>{{ t('voiceChoose') }}</span>
@@ -256,7 +331,7 @@ defineExpose({ forget })
     </label>
 
     <div class="row">
-      <button type="button" class="button secondary small" :disabled="!stemJob || !voice || busy" @click="start">
+      <button type="button" class="button secondary small" :disabled="!vocals || !voice || busy" @click="start">
         {{ busy ? t('voiceRunning') : t('voiceStart') }}
       </button>
     </div>
@@ -269,17 +344,28 @@ defineExpose({ forget })
     </div>
 
     <p v-if="voices.length === 0" class="hint muted">{{ t('voiceNoVoices') }}</p>
-    <p v-else-if="!stemJob && !job && !busy" class="hint muted">{{ t('voiceNeedsStems') }}</p>
+    <p v-else-if="!vocals && !job && !busy" class="hint muted">
+      {{ source === 'file' ? t('voiceNeedsFile') : t('voiceNeedsStems') }}
+    </p>
     <p v-if="busy && statusText" class="hint">{{ statusText }}</p>
-    <p v-else-if="job" class="hint">{{ t('voiceWaiting') }}</p>
+    <p v-else-if="job" class="hint">{{ canExport ? t('voiceWaiting') : t('voiceWaitingNoProject') }}</p>
     <p v-else-if="note" class="hint muted">{{ note }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
 
     <dialog ref="dialog" class="voice-dialog" @cancel.prevent="close">
       <h3>{{ t('voiceReadyTitle') }}</h3>
-      <p>{{ t('voiceReadyInfo') }}</p>
+      <p>{{ canExport ? t('voiceReadyInfo') : t('voiceReadyInfoNoProject') }}</p>
       <div class="choices">
-        <button type="button" class="button primary" @click="intoProject">{{ t('voiceIntoProject') }}</button>
+        <button v-if="canExport" type="button" class="button primary" @click="intoProject">{{ t('voiceIntoProject') }}</button>
+        <button
+          v-else
+          type="button"
+          class="button primary"
+          :disabled="downloading"
+          @click="saveWav().then(close)"
+        >
+          {{ downloading ? t('voiceDownloading') : t('voiceDownload') }}
+        </button>
         <button type="button" class="button secondary" @click="close">{{ t('voiceLater') }}</button>
         <button type="button" class="button secondary" @click="discard">{{ t('voiceDiscard') }}</button>
       </div>
@@ -304,6 +390,25 @@ h3 {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.sources label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.own {
+  margin-bottom: 0.75rem;
 }
 
 .row.ready {

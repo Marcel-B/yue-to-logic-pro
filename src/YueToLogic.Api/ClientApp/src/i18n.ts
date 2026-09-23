@@ -206,7 +206,15 @@ const messages = {
 
     // Stimme ändern (ChangeMyVoice)
     voiceTitle: 'Stimme ändern',
-    voiceInfo: 'Den getrennten Gesang an ChangeMyVoice schicken und ihn mit dem Timbre einer Modellstimme singen lassen. Melodie und Vortrag bleiben, nur die Stimme ist eine andere.',
+    voiceInfo: 'Gesang an ChangeMyVoice schicken und ihn mit dem Timbre einer Modellstimme singen lassen – den getrennten aus den Stems oder eine eigene WAV-Datei. Melodie und Vortrag bleiben, nur die Stimme ist eine andere.',
+    voiceSource: 'Woher der Gesang kommt',
+    voiceSourceStems: 'Getrennter Gesang (Stems)',
+    voiceSourceFile: 'Eigene WAV-Datei',
+    voiceDropHint: 'Gesang als WAV hier ablegen',
+    notWav: 'Das ist keine .wav-Datei – der Dienst nimmt nur WAV.',
+    voiceNeedsFile: 'Eine WAV-Datei mit dem Gesang wählen; Stems sind dafür nicht nötig.',
+    voiceReadyInfoNoProject: 'Der Gesang singt jetzt mit der gewählten Modellstimme. Er lässt sich als WAV laden – oder mit einer score.abc ins Logic-Projekt nehmen.',
+    voiceWaitingNoProject: 'Der geänderte Gesang liegt bereit. Mit einer score.abc kommt er ins nächste Logic-Projekt, sonst als WAV laden. Der Dienst hebt ihn höchstens einen Tag auf.',
     voiceChoose: 'Modellstimme',
     voiceStart: 'Stimme ändern',
     voiceRunning: 'läuft …',
@@ -547,7 +555,15 @@ const messages = {
 
     // Voice conversion (ChangeMyVoice)
     voiceTitle: 'Change the voice',
-    voiceInfo: 'Sends the separated vocals to ChangeMyVoice and has them sung with the timbre of a model voice. Melody and performance stay as they are; only the voice is another one.',
+    voiceInfo: 'Sends vocals to ChangeMyVoice and has them sung with the timbre of a model voice – the separated ones from the stems or a WAV file of your own. Melody and performance stay as they are; only the voice is another one.',
+    voiceSource: 'Where the vocals come from',
+    voiceSourceStems: 'Separated vocals (stems)',
+    voiceSourceFile: 'WAV file of your own',
+    voiceDropHint: 'Drop the vocals as a WAV here',
+    notWav: 'This is not a .wav file – the service only takes WAV.',
+    voiceNeedsFile: 'Choose a WAV file with the vocals; no stems are needed for it.',
+    voiceReadyInfoNoProject: 'The vocals now sing with the chosen model voice. Download them as a WAV – or load a score.abc to take them into the Logic project.',
+    voiceWaitingNoProject: 'The changed vocals are ready. With a score.abc they go into the next Logic project, otherwise download them as a WAV. The service keeps them for a day at most.',
     voiceChoose: 'Model voice',
     voiceStart: 'Change the voice',
     voiceRunning: 'running …',

@@ -219,12 +219,20 @@ export async function deleteVoice(id: string): Promise<void> {
 }
 
 /**
- * Converts the vocals of a finished separation to a reference voice. The audio stays on the servers: the
- * browser passes the two ids, the vocal stem travels from the stem service to this one and on.
+ * Where the vocals of a conversion come from: a finished separation, whose vocal stem stays on the servers -
+ * the browser passes the id, the stem travels from the stem service to this one and on - or a WAV of vocals
+ * the user brings along, which needs no separation first.
  */
-export async function startVoiceJob(stemJob: string, voiceId: string, signal?: AbortSignal): Promise<VoiceJob> {
+export type VoiceSource = { stemJob: string } | { file: File }
+
+/** Converts vocals to a reference voice. */
+export async function startVoiceJob(source: VoiceSource, voiceId: string, signal?: AbortSignal): Promise<VoiceJob> {
   const form = new FormData()
-  form.append('stemJob', stemJob)
+  if ('stemJob' in source) {
+    form.append('stemJob', source.stemJob)
+  } else {
+    form.append('file', source.file, source.file.name)
+  }
   form.append('voiceId', voiceId)
   return (await request('/api/voice/jobs', { method: 'POST', body: form, signal })).json() as Promise<VoiceJob>
 }
