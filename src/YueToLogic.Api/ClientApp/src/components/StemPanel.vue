@@ -148,9 +148,12 @@ watch(model, (id) => {
 
 function reset(): void {
   window.clearTimeout(timer)
-  // A job nobody is going to import any more: let the service drop its files now rather than in a day.
-  if (job.value) {
-    void confirmStems(job.value)
+  // Everything this panel still holds at the service goes: a finished separation nobody is going to import,
+  // and one that is still running. The running one matters most - it is only known here, so dropping it
+  // silently would keep a place in the queue that the service only takes a couple of.
+  const pending = job.value ?? jobId
+  if (pending) {
+    void confirmStems(pending)
   }
   close()
   jobId = null

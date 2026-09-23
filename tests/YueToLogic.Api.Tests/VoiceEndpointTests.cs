@@ -128,7 +128,7 @@ public class VoiceEndpointTests(WebApplicationFactory<Program> factory) : IClass
         {
             Jobs =
             [
-                new VoiceJob(JobId, VoiceJobStatus.Running, "v1", "Marcel", created, created.AddMinutes(1)),
+                new VoiceJob(JobId, VoiceJobStatus.Completed, "v1", "Marcel", created, created.AddMinutes(1), created.AddMinutes(3), HasResult: true),
                 new VoiceJob("job-0815", VoiceJobStatus.Failed, "v1", "Marcel", created.AddHours(-1), null, created, "MODEL_ERROR", "the Mac said no"),
             ],
             Total = 137,
