@@ -217,6 +217,14 @@ export interface VoiceJobPage {
   offset: number
 }
 
+/**
+ * The diagnostic codes the interface acts on rather than only shows. They are part of the contract - see
+ * `DiagnosticCodes` in the core library - and each one means that the export left something at its service
+ * instead of taking it into the project.
+ */
+export const STEMS_NOT_TAKEN = 'YTL054'
+export const VOICE_NOT_TAKEN = 'YTL056'
+
 /** The tracks a conversion can produce, in the order the MIDI file lists them. */
 export const TRACK_NAMES = ['Vocal', 'Ins', 'Vocal 8vb', 'Chords', 'Bass', 'Drums', 'Guide', 'Kick', 'Snare', 'HiHat', 'Crash'] as const
 

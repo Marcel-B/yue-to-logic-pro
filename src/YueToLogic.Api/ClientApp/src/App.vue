@@ -28,7 +28,7 @@ import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './i
 import { deletePreset, loadPresets, savePreset, type Preset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
-import type { Assignments, ConversionResult, Diagnostic, Instrument, ReferenceVoice } from './types'
+import { STEMS_NOT_TAKEN, VOICE_NOT_TAKEN, type Assignments, type ConversionResult, type Diagnostic, type Instrument, type ReferenceVoice } from './types'
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
@@ -288,9 +288,18 @@ async function exportLogic(): Promise<void> {
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
-    // The server confirmed the import, so the jobs are gone from their services.
-    stemJob.value = null
-    voiceJob.value = null
+    // Only what went into the project was confirmed and is now gone from its service. What the server could
+    // not take - vocals of another sample rate, say - stays there, and so does the job here: otherwise the
+    // panel would drop the only way of downloading the result.
+    const notTaken = (code: string) => exported.warnings.some((warning) => warning.code === code)
+    if (!notTaken(STEMS_NOT_TAKEN)) {
+      stemJob.value = null
+    }
+    if (notTaken(VOICE_NOT_TAKEN)) {
+      voicePanel.value?.notTaken()
+    } else {
+      voiceJob.value = null
+    }
   } catch (caught) {
     logicError.value =
       caught instanceof LogicExportError
