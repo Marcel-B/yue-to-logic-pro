@@ -13,7 +13,7 @@ namespace YueToLogic.Api;
 /// <remarks>
 /// The Logic template's audio tracks are prepared for 48 kHz, which is what YuE writes and what StemMyWav
 /// hands back. ChangeMyVoice works at its model's own rate, so what comes back is checked here rather than in
-/// the writer: a recording Logic cannot take leaves the project with the separated vocals and a warning,
+/// the writer: a recording Logic cannot take is left out of the project with a warning,
 /// instead of failing an export that is otherwise fine. The service names the result's checksum, which is
 /// compared as well - a transfer that broke off would otherwise end up in the project as a truncated file.
 /// </remarks>
@@ -29,6 +29,13 @@ public sealed class VoiceImport : IAsyncDisposable
 
     public bool HasVocals => file is not null;
 
+    /// <summary>
+    /// What the project gets instead. The vocals need not come from a separation - a WAV of one's own is
+    /// converted without one - so the warning cannot promise separated vocals that may not exist.
+    /// </summary>
+    private const string WithoutThem =
+        "the project is written without the converted vocals, and its vocals track keeps the separated ones if there are any.";
+
     public static async Task<VoiceImport> FetchAsync(
         IVoiceConversionService? service,
         string job,
@@ -37,7 +44,7 @@ public sealed class VoiceImport : IAsyncDisposable
         var import = new VoiceImport();
         if (service is null)
         {
-            import.Problem = Warning("This server has no voice service, so the project keeps the separated vocals.");
+            import.Problem = Warning($"This server has no voice service; {WithoutThem}");
             return import;
         }
 
@@ -59,7 +66,7 @@ public sealed class VoiceImport : IAsyncDisposable
         catch (VoiceConversionException exception)
         {
             await import.DropAsync().ConfigureAwait(false);
-            import.Problem = Warning($"The converted vocals could not be fetched, so the project keeps the separated ones: {exception.Message}");
+            import.Problem = Warning($"The converted vocals could not be fetched ({exception.Message}); {WithoutThem}");
         }
 
         return import;
@@ -85,7 +92,7 @@ public sealed class VoiceImport : IAsyncDisposable
             if (!hash.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
             {
                 await DropAsync().ConfigureAwait(false);
-                Problem = Warning("The converted vocals did not arrive whole - their checksum differs from the one the voice service named; the project keeps the separated vocals.");
+                Problem = Warning($"The converted vocals did not arrive whole - their checksum differs from the one the voice service named; {WithoutThem}");
                 return;
             }
         }
@@ -97,14 +104,14 @@ public sealed class VoiceImport : IAsyncDisposable
         if (!AudioStreamInfo.TryParse(header.AsSpan(0, length), out var info))
         {
             await DropAsync().ConfigureAwait(false);
-            Problem = Warning("The voice service sent something that is neither a WAV nor a FLAC; the project keeps the separated vocals.");
+            Problem = Warning($"The voice service sent something that is neither a WAV nor a FLAC; {WithoutThem}");
         }
         else if (info!.SampleRate != LogicProjectWriter.RequiredSampleRate)
         {
             await DropAsync().ConfigureAwait(false);
             Problem = Warning(
-                $"The converted vocals have {info.SampleRate} Hz, the Logic project needs {LogicProjectWriter.RequiredSampleRate} Hz. " +
-                "The project keeps the separated vocals; the converted ones can be downloaded and brought in by hand.");
+                $"The converted vocals have {info.SampleRate} Hz, the Logic project needs {LogicProjectWriter.RequiredSampleRate} Hz; " +
+                $"{WithoutThem} They can be downloaded and brought in by hand.");
         }
     }
 
