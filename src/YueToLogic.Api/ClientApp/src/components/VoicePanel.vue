@@ -119,6 +119,15 @@ function reset(): void {
 }
 
 /**
+ * The export could not take the result - vocals of another sample rate, an incomplete transfer - so the job
+ * stays at the service and here. The hint below would otherwise promise the next project a voice that the
+ * next project will refuse again; instead it points at the download, which is the way out by hand.
+ */
+function notTaken(): void {
+  note.value = t('voiceNotTaken')
+}
+
+/**
  * The job was removed in the job dialog, so there is nothing left to poll or to export: the panel stops and
  * says so, instead of running into the service's "unknown job" on the next poll.
  */
@@ -221,6 +230,8 @@ function discard(): void {
   }
   tracked.value = null
   status.value = null
+  // Nothing is left to download, so a note pointing at the download would be wrong.
+  note.value = null
 }
 
 function close(): void {
@@ -240,7 +251,7 @@ function fail(caught: unknown): void {
   window.clearTimeout(timer)
 }
 
-defineExpose({ forget })
+defineExpose({ forget, notTaken })
 </script>
 
 <template>
@@ -271,8 +282,8 @@ defineExpose({ forget })
     <p v-if="voices.length === 0" class="hint muted">{{ t('voiceNoVoices') }}</p>
     <p v-else-if="!stemJob && !job && !busy" class="hint muted">{{ t('voiceNeedsStems') }}</p>
     <p v-if="busy && statusText" class="hint">{{ statusText }}</p>
-    <p v-else-if="job" class="hint">{{ t('voiceWaiting') }}</p>
     <p v-else-if="note" class="hint muted">{{ note }}</p>
+    <p v-else-if="job" class="hint">{{ t('voiceWaiting') }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
 
     <dialog ref="dialog" class="voice-dialog" @cancel.prevent="close">

@@ -225,6 +225,7 @@ const messages = {
     voiceFailed: 'Die Stimmänderung ist fehlgeschlagen.',
     voiceRetryLater: '{message} Der Dienst ist gerade ausgelastet – später noch einmal versuchen.',
     voiceRemovedElsewhere: 'Der Auftrag dieser Sitzung wurde im Voice-Dienst gelöscht.',
+    voiceNotTaken: 'Der geänderte Gesang kam nicht ins Projekt – warum, steht bei den Hinweisen zum Logic-Projekt. Er liegt weiter beim Dienst: hier laden und in Logic auf die Vocals-Spur ziehen.',
     logicVoiceRunning: 'Die Stimme wird noch geändert. Das Projekt lässt sich jetzt schon laden, bekommt sie dann aber nicht – oder du wartest, bis sich das Fenster meldet.',
     logicVoiceReady: 'Der geänderte Gesang kommt auf die Vocals-Spur des Projekts.',
 
@@ -566,6 +567,7 @@ const messages = {
     voiceFailed: 'Changing the voice failed.',
     voiceRetryLater: '{message} The service is busy right now — worth trying again later.',
     voiceRemovedElsewhere: 'This session’s job was removed in the voice service.',
+    voiceNotTaken: 'The changed vocals did not go into the project — the warnings of the Logic export say why. They are still at the service: download them here and drag them onto the vocals track in Logic.',
     logicVoiceRunning: 'The voice is still being changed. The project can be downloaded now, but then comes without it — or you wait until the window says so.',
     logicVoiceReady: 'The changed vocals go onto the project’s vocals track.',
 
