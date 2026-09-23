@@ -65,9 +65,13 @@ const lanes = shallowRef(lanesOf(voices.value))
 const trackIds = computed(() => voices.value.map((voice) => voice.id))
 /** The routing chosen by hand per track; an instrument, where one is assigned, overrides it without touching it. */
 const routings = ref<Routing[]>(loadRoutings(trackIds.value, defaultRoutings(voices.value)))
-/** Instruments are offered where MIDI hardware can be driven; elsewhere the table keeps to the manual choices. */
-const instrumentsUsable = midiUsable()
-const hasInstruments = computed(() => instrumentsUsable && props.instruments.length > 0)
+/**
+ * Assigning an instrument is offered wherever there are instruments: it says which channel a track is written
+ * on and which hardware the Logic project addresses, neither of which needs the browser. Only driving a port
+ * from here does, which is what `canDrivePorts` is about - without it the preview sounds through the browser.
+ */
+const canDrivePorts = midiUsable()
+const hasInstruments = computed(() => props.instruments.length > 0)
 /** What the player uses: the instrument's port and channel where a track has one, the manual routing elsewhere. */
 const effective = computed(() =>
   routings.value.map((routing, index) =>
@@ -364,7 +368,7 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
         <button v-if="canAskForMidi" type="button" class="button secondary small" @click="loadPorts">
           {{ t('previewFindMidi') }}
         </button>
-        <button v-if="instrumentsUsable" type="button" class="button secondary small" @click="emit('manageInstruments')">
+        <button type="button" class="button secondary small" @click="emit('manageInstruments')">
           {{ t('instrumentsManage') }}
         </button>
         <label class="field">
@@ -404,6 +408,8 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
             </td>
             <template v-if="effective[index]?.instrument">
               <td v-if="effective[index]?.port" class="fixed">{{ effective[index]?.port?.name }}</td>
+              <!-- Without Web MIDI no port is ever found, so naming one that is missing would be misleading. -->
+              <td v-else-if="!canDrivePorts" class="fixed muted">{{ effective[index]?.instrument?.port }}</td>
               <td v-else class="fixed warning">{{ t('previewInstrumentMissing', { port: effective[index]?.instrument?.port ?? '' }) }}</td>
               <td class="channel fixed">{{ effective[index]!.routing.channel + 1 }}</td>
             </template>
