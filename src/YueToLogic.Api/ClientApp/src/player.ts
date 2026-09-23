@@ -251,9 +251,11 @@ export function midiSupported(): boolean {
 /**
  * Whether MIDI hardware can actually be driven from this browser, which is the case under the Chromium engine
  * (Chrome, Edge). Safari has no Web MIDI; Firefox declares the API but routes every request through a
- * site-permission add-on, so a port never simply appears. Instruments are therefore only edited where a port
- * can be picked: elsewhere the library is shown read-only and the routing table keeps to the manual choices.
- * `userAgentData` exists in Chromium only, which makes it a plain test for the engine.
+ * site-permission add-on, so a port never simply appears. This gates playing through a port and reading the
+ * outputs of the machine - not the instrument library, which lives on the server and decides the channels of
+ * the MIDI file and the hardware of the Logic project: that is edited everywhere, only with the outputs of
+ * the stored instruments to choose from. `userAgentData` exists in Chromium only, which makes it a plain test
+ * for the engine.
  */
 export function midiUsable(): boolean {
   return midiSupported() && 'userAgentData' in navigator

@@ -19,8 +19,12 @@ const emit = defineEmits<{ changed: [instruments: Instrument[]] }>()
 /** The port select's value for a port typed by hand, e.g. for an interface that is not plugged in right now. */
 const OTHER_PORT = '\u0000other'
 
-/** Outside Chromium the library is only shown: ports cannot be picked there, so nothing is added or changed. */
-const readOnly = !midiUsable()
+/**
+ * Whether the browser can read the MIDI outputs of this machine, which only Chromium can. Elsewhere the
+ * library is still edited - it lives on the server and decides channels and Logic routing, not playback - but
+ * the output can only be chosen among the names that are already stored, since none can be looked up.
+ */
+const canReadPorts = midiUsable()
 
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 const ports = ref<MidiPort[]>([])
@@ -39,8 +43,19 @@ const error = ref<string | null>(null)
 
 const channels = Array.from({ length: 16 }, (_, index) => index + 1)
 
-/** Port names the browser offers, each once; two identical interfaces cannot be told apart by name anyway. */
-const portNames = computed(() => [...new Set(ports.value.map((entry) => entry.name.trim()))])
+/**
+ * The outputs to choose from: what the browser offers, then what the stored instruments name. The second half
+ * is what makes the dialog work without Web MIDI - a port someone once entered stays available to everyone -
+ * and it also helps in Chromium, where an interface that is unplugged right now is otherwise gone from the list.
+ */
+const portNames = computed(() => [
+  ...new Set([...ports.value.map((entry) => entry.name.trim()), ...props.instruments.map((entry) => entry.port.trim())]),
+])
+
+/** A port may be typed where the browser can read them; elsewhere only a stored name can be picked. */
+const canTypePort = canReadPorts
+/** Without a single known output there is nothing to point an instrument at, so nothing can be added here. */
+const canAdd = computed(() => canTypePort || portNames.value.length > 0)
 const chosenPort = computed(() => (port.value === OTHER_PORT ? otherPort.value : port.value).trim())
 /** The drum notes as numbers, or null where a field holds nothing a note can be read from. */
 const drumNotes = computed<Record<keyof DrumNotes, number | null>>(
@@ -68,7 +83,7 @@ async function open(): Promise<void> {
   startAdding()
   error.value = null
   dialog.value?.showModal()
-  if (readOnly) {
+  if (!canReadPorts) {
     return
   }
   if (midiSupported() && (await midiAlreadyAllowed())) {
@@ -112,6 +127,8 @@ function edit(instrument: Instrument): void {
   kind.value = instrument.kind
   drumText.value = drumTexts(instrument.drums ?? GENERAL_MIDI_DRUMS)
   error.value = null
+  // Every stored port is among the names, so this is the usual way; the branch below is for a name that
+  // changed between loading the list and editing.
   if (portNames.value.includes(instrument.port)) {
     port.value = instrument.port
     otherPort.value = ''
@@ -197,7 +214,7 @@ defineExpose({ open })
           <th>{{ t('instrumentPort') }}</th>
           <th>{{ t('instrumentChannel') }}</th>
           <th>{{ t('instrumentKind') }}</th>
-          <th v-if="!readOnly"><span class="sr-only">{{ t('instrumentEdit') }}</span></th>
+          <th><span class="sr-only">{{ t('instrumentEdit') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -209,7 +226,7 @@ defineExpose({ open })
             {{ instrument.kind === 'DrumMachine' ? t('instrumentKindDrumMachine') : t('instrumentKindSynth') }}
             <span v-if="instrument.drums" class="muted drums">{{ drumSummary(instrument.drums) }}</span>
           </td>
-          <td v-if="!readOnly" class="actions">
+          <td class="actions">
             <button type="button" class="link" :disabled="busy" @click="edit(instrument)">{{ t('instrumentEdit') }}</button>
             <button type="button" class="link" :disabled="busy" @click="remove(instrument)">{{ t('instrumentDelete') }}</button>
           </td>
@@ -218,8 +235,10 @@ defineExpose({ open })
     </table>
     <p v-else class="muted empty">{{ t('instrumentsEmpty') }}</p>
 
-    <div v-if="readOnly" class="editor">
-      <p class="hint muted">{{ t('instrumentsChromiumOnly') }}</p>
+    <p v-if="!canReadPorts" class="hint muted">{{ t('instrumentsChromiumOnly') }}</p>
+
+    <div v-if="!canAdd" class="editor">
+      <p class="hint muted">{{ t('instrumentsNeedPort') }}</p>
       <div class="choices">
         <button type="button" class="button secondary" @click="close">{{ t('instrumentClose') }}</button>
       </div>
@@ -235,7 +254,7 @@ defineExpose({ open })
         {{ t('instrumentPort') }}
         <select v-model="port">
           <option v-for="entry in portNames" :key="entry" :value="entry">{{ entry }}</option>
-          <option :value="OTHER_PORT">{{ t('instrumentPortOther') }}</option>
+          <option v-if="canTypePort" :value="OTHER_PORT">{{ t('instrumentPortOther') }}</option>
         </select>
       </label>
       <label v-if="port === OTHER_PORT">
@@ -248,7 +267,7 @@ defineExpose({ open })
           <option v-for="entry in channels" :key="entry" :value="entry">{{ entry }}</option>
         </select>
       </label>
-      <p class="muted hint">{{ t('instrumentPortHint') }}</p>
+      <p class="muted hint">{{ canTypePort ? t('instrumentPortHint') : t('instrumentPortStoredOnly') }}</p>
       <label>
         {{ t('instrumentKind') }}
         <select v-model="kind">

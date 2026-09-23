@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { ref, useTemplateRef, watch } from 'vue'
 import {
   ApiError,
   assignInstrument,
@@ -25,7 +25,6 @@ import VoicePanel from './components/VoicePanel.vue'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
-import { midiUsable } from './player'
 import { deletePreset, loadPresets, savePreset, type Preset } from './presets'
 import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
@@ -101,12 +100,12 @@ function voiceJobDeleted(id: string): void {
 
 /** The instrument library and which track plays which, both kept on the server. */
 const instruments = ref<Instrument[]>([])
-const assignments = ref<Assignments>({})
 /**
- * Outside Chromium no port can be picked, so the instruments are only shown and not applied: the preview, the
- * MIDI file and the Logic project then follow what the routing table offers there, the manual choices.
+ * Which track plays which instrument. This is configuration, not playback: it decides the channel a track is
+ * written on and the hardware the Logic project addresses, both of which the server produces. It therefore
+ * applies in every browser - only sending the preview to a MIDI port needs Web MIDI, which Chromium alone has.
  */
-const appliedAssignments = computed(() => (midiUsable() ? assignments.value : {}))
+const assignments = ref<Assignments>({})
 const instrumentsError = ref<string | null>(null)
 const instrumentDialog = useTemplateRef<InstanceType<typeof InstrumentDialog>>('instrumentDialog')
 void loadInstruments()
@@ -285,7 +284,7 @@ async function exportLogic(): Promise<void> {
       form.value.splitSections,
       stemJob.value,
       voiceJob.value,
-      instrumentsForExport(appliedAssignments.value, instruments.value),
+      instrumentsForExport(assignments.value, instruments.value),
     )
     logicWarnings.value = exported.warnings
     download(exported.zip, exported.fileName)
@@ -330,8 +329,8 @@ function reset(): void {
 
 /** The form's options with every assigned track on its instrument's channel, and the drums on a drum machine's notes. */
 function conversionOptions() {
-  const options = withInstrumentChannels(toConversionOptions(form.value, audioLength.value), appliedAssignments.value, instruments.value)
-  return withDrumNotes(options, appliedAssignments.value, instruments.value)
+  const options = withInstrumentChannels(toConversionOptions(form.value, audioLength.value), assignments.value, instruments.value)
+  return withDrumNotes(options, assignments.value, instruments.value)
 }
 
 async function convert(): Promise<void> {
@@ -540,7 +539,7 @@ async function convert(): Promise<void> {
       :include-chords="form.includeChords"
       :stale="stale"
       :instruments="instruments"
-      :assignments="appliedAssignments"
+      :assignments="assignments"
       @assign="assign"
       @manage-instruments="openInstruments"
     />
