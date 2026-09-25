@@ -14,9 +14,10 @@ namespace YueToLogic.Api.Tests;
 public class ConvertEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
 {
     [Fact]
-    public async Task Fitting_the_tempo_and_a_count_in_reach_the_conversion()
+    public async Task A_count_in_reaches_the_conversion_and_the_removed_tempo_fit_is_ignored()
     {
-        // The sample is 8 bars at 88 BPM, which is 21.818 s.
+        // The sample is 8 bars at 88 BPM, which is 21.818 s. Clients such as YuE UI sent "fitTempo" until the
+        // tempo fit was removed; it must be ignored rather than refused or applied.
         const string options = """
             {"arrangement":{"countIn":{"bars":2}},"fitTempo":{"audioSeconds":21.0}}
             """;
@@ -25,10 +26,9 @@ public class ConvertEndpointTests(WebApplicationFactory<Program> factory) : ICla
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var result = JsonSerializer.Deserialize(await response.Content.ReadAsStringAsync(), YueToLogicJsonContext.Default.ConversionResult)!;
-        Assert.Equal(91.4286, result.Score!.TempoBpm, 4);
-        Assert.Equal(21.0, result.Score.MusicDurationSeconds, 3);
+        Assert.Equal(88, result.Score!.TempoBpm);
+        Assert.Equal(21.818, result.Score.MusicDurationSeconds, 3);
         Assert.Equal(2 * 4 * 480, result.Score.CountInTicks);
-        Assert.Contains(result.Diagnostics, d => d.Code == DiagnosticCodes.TempoFitted);
     }
 
     private static readonly string SampleScore = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Samples", "score.abc"));

@@ -27,14 +27,13 @@ import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
 import { deletePreset, loadPresets, savePreset, type Preset } from './presets'
-import { audioSeconds, clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
+import { clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
 import { STEMS_NOT_TAKEN, VOICE_NOT_TAKEN, type Assignments, type ConversionResult, type Diagnostic, type Instrument, type ReferenceVoice } from './types'
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
 /** Length of the chosen audio.flac, read from its header; the tempo fit is measured against it. */
-const audioLength = ref<number | null>(null)
 /** What came out of a dropped folder: nothing usable, or which of several songs was taken. */
 const folderNote = ref<string | null>(null)
 
@@ -247,10 +246,6 @@ async function selectAudio(selected: File | null): Promise<void> {
   audio.value = selected
   logicError.value = null
   logicWarnings.value = []
-  audioLength.value = selected ? await audioSeconds(selected) : null
-  if (audioLength.value === null) {
-    form.value.fitTempo = false
-  }
 }
 
 /** A dropped YuE folder fills both files at once; with several songs in it the first one is taken. */
@@ -327,7 +322,6 @@ function reset(): void {
   folderNote.value = null
   stemJob.value = null
   voiceJob.value = null
-  audioLength.value = null
   form.value = defaultFormState()
   presetName.value = ''
   newPresetName.value = ''
@@ -343,7 +337,7 @@ function reset(): void {
 
 /** The form's options with every assigned track on its instrument's channel, and the drums on a drum machine's notes. */
 function conversionOptions() {
-  const options = withInstrumentChannels(toConversionOptions(form.value, audioLength.value), assignments.value, instruments.value)
+  const options = withInstrumentChannels(toConversionOptions(form.value), assignments.value, instruments.value)
   return withDrumNotes(options, assignments.value, instruments.value)
 }
 
@@ -532,7 +526,7 @@ async function convert(): Promise<void> {
         </div>
       </div>
       <p v-if="presetsError" class="hint danger presets-error" role="alert">{{ presetsError }}</p>
-      <OptionsForm v-model="form" :has-audio="audioLength !== null" />
+      <OptionsForm v-model="form" />
 
       <form class="submit" @submit.prevent="convert">
         <label>

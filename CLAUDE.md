@@ -48,8 +48,7 @@ No console, no file system, no logging. Input is a `string`/`Stream`, output `by
 1. `ConversionOptionsValidator` – range checks shared by all hosts (error `YTL042`).
 2. `AbcScoreParser` (`Abc/`) – reads YuE2's ABC dialect into a `ScoreDocument` (absolute ticks, voices, chords, sections, meter/key changes). Lenient: anything outside the dialect becomes a diagnostic, only a score that cannot be placed on a tick grid fails. Note the YuE2 rule that an accidental applies to its note letter in every octave until the bar line.
 3. `ScoreArranger` (`Arrangement/`) – octave shifts, doubling, then generated tracks (chords, bass, drums, guide tones), then `GrooveProcessor` (swing/humanize), then `MonoProcessor`, and last `CountInBuilder`. Order matters and is documented in the class; the result is a new `ScoreDocument`, so JSON, MIDI and the Logic project always show the same notes.
-4. `TempoFitter` – optional, after arrangement and before rendering so every output carries the fitted tempo. The library never measures audio; the host passes `fitTempo.audioSeconds` (CLI reads the FLAC header, the browser reads 42 bytes client-side).
-5. `MidiRenderer` (`Midi/`, DryWetMidi) – type 1 SMF: conductor track, one track per voice, chords, accompaniment; drums on channel 10.
+4. `MidiRenderer` (`Midi/`, DryWetMidi) – type 1 SMF: conductor track, one track per voice, chords, accompaniment; drums on channel 10.
 
 `VoiceTrack.Kind` (`Melody`, `Chords`, `Bass`, `Drums`, `GuideTones`, `Doubling`) is how later stages and the Logic writer tell generated tracks apart. Track names (`Vocal`, `Ins`, `Chords`, `Bass`, `Drums`, `Guide`, `Vocal 8vb`, `Kick`…) are the key for MIDI channels, programs, instruments and Logic template tracks alike.
 

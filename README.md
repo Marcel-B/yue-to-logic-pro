@@ -63,7 +63,6 @@ MIDI:        /…/score.mid
 | `--logic-split-sections` | One region per song section in the Logic project instead of one per track |
 | `--count-in <n>` | Silent bars in front of the song (0 to 8), with a click on every beat (see below) |
 | `--count-in-silent` | No click in those bars; implies `--count-in 1` |
-| `--fit-tempo` | Adjust the tempo so the score lasts as long as the audio given with `--logic` (see below) |
 | `--ppq <n>` | MIDI resolution in ticks per quarter note (default 480) |
 | `--logic <audio.flac>` | Also write a Logic Pro project `<output>.logicx` with all tracks and this audio (see below) |
 | `--logic-no-audio` | Also write a Logic Pro project without audio; its audio track stays empty |
@@ -153,8 +152,7 @@ If the frontend is built separately, for example in its own Docker stage, pass `
     },
     "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true },
     "countIn": { "bars": 1, "click": true }
-  },
-  "fitTempo": { "audioSeconds": 352.68, "maxDeviation": 0.05 }
+  }
 }
 ```
 
@@ -315,25 +313,6 @@ A Standard MIDI File, type 1:
 The arrangement options are also available in the library (`ConversionOptions.Arrangement`), and the generated tracks appear in the JSON output with `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` or `"Doubling"`. With `--split-drums` (web interface: *One track per drum*) the kit spreads over the tracks `Kick`, `Snare`, `HiHat` and `Crash` — the same notes, only apart, so that every drum can have its own instrument and its own place in the mix. They all stay on the General MIDI drum channel, and a drum the pattern never plays gets no track. The patterns are written in drums, not in notes: `arrangement.drums.notes` (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, each 0-127) says which note each drum is played on, General MIDI when left out, and a split kit sorts by drum, so two drums on one note still land on their own tracks. A chord pattern builds the chord track during arrangement, so the MIDI file and the Logic project play exactly the same notes.
 
 Which tracks a Logic project has comes from the template, not from this tool. The one shipped with it has eleven MIDI tracks — `Vocal`, `Ins`, `Vocal 8vb`, `Chords`, `Bass`, `Guide`, `Drums` and `Kick`, `Snare`, `HiHat`, `Crash` for a split kit — and three audio tracks for the recording and its stems. A voice the template has no track for — a doubling of the instrumental voice (`Ins 8vb`), say — reaches the MIDI file but not the Logic project; a warning (`YTL053`) says so and lists the tracks the template does have. Saving your own template with a track of that name — see *Logic Pro project* below — fills it as well.
-
-## Fitting the tempo
-
-YuE's audio and its symbolic score do not always agree on how long the song is. Where the difference is a fraction of a percent the score is simply a little off, and audio and MIDI drift apart towards the end of the song. `--fit-tempo` stretches the tempo so the score lasts exactly as long as the recording:
-
-```
-Info YTL060: Tempo fitted to the audio: 105 → 105.479 BPM, so the score's 354.3 s become the audio's 352.7 s.
-```
-
-A large difference means something else. YuE stops generating at a limit — 300 or 360 seconds in the runs this was built against — so the audio can end long before the score does, in one case 37 bars early. Fitting the tempo would then compress the whole song into a length the music never had. Anything more than five percent is therefore reported and left alone:
-
-```
-Warning YTL061: The tempo was not fitted: the score lasts 368.1 s but the audio 300.0 s, a difference of
-22.7 %. That is more than a drift; the audio was probably cut short, or it belongs to another take.
-```
-
-`--fit-tempo` needs the recording to measure and therefore goes together with `--logic <audio.flac>`. The fitted tempo reaches the MIDI file, the JSON dump and the Logic project alike, since it is applied before any of them is written. A count-in is left out of the comparison: the recording holds the music, not the silence in front of it. The library itself never opens a file — the host measures the audio and passes `fitTempo.audioSeconds`; in the web interface the browser reads the 42-byte FLAC header, so nothing has to be uploaded for a MIDI-only conversion.
-
-The web interface offers the same under *Fit the tempo to the audio length*, and `fitTempo.maxDeviation` widens the five percent for a recording you know is right.
 
 ## Count-in
 
