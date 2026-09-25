@@ -63,7 +63,6 @@ MIDI:        /…/score.mid
 | `--logic-split-sections` | Im Logic-Projekt eine Region pro Songabschnitt statt einer pro Spur |
 | `--count-in <n>` | Stille Takte vor dem Song (0 bis 8), mit Klick auf jedem Schlag (siehe unten) |
 | `--count-in-silent` | Kein Klick in diesen Takten; schließt `--count-in 1` ein |
-| `--fit-tempo` | Tempo so anpassen, dass der Score so lang ist wie das mit `--logic` angegebene Audio (siehe unten) |
 | `--ppq <n>` | MIDI-Auflösung in Ticks pro Viertelnote (Standard 480) |
 | `--logic <audio.flac>` | Zusätzlich ein Logic-Pro-Projekt `<ausgabe>.logicx` mit allen Spuren und diesem Audio schreiben (siehe unten) |
 | `--logic-no-audio` | Zusätzlich ein Logic-Pro-Projekt ohne Audio schreiben; die Audiospur bleibt leer |
@@ -153,8 +152,7 @@ Wird das Frontend separat gebaut, z. B. in einer eigenen Docker-Stage, `-p:SkipC
     },
     "mono": { "gapMs": 12, "minimumLengthMs": 40, "legato": false, "includeBass": true },
     "countIn": { "bars": 1, "click": true }
-  },
-  "fitTempo": { "audioSeconds": 352.68, "maxDeviation": 0.05 }
+  }
 }
 ```
 
@@ -315,25 +313,6 @@ Eine Standard-MIDI-Datei vom Typ 1:
 Die Arrangement-Optionen stehen auch in der Bibliothek zur Verfügung (`ConversionOptions.Arrangement`), und die erzeugten Spuren erscheinen in der JSON-Ausgabe mit `"kind": "Chords"`, `"Bass"`, `"Drums"`, `"GuideTones"` bzw. `"Doubling"`. Mit `--split-drums` (Weboberfläche: *Eine Spur je Trommel*) verteilt sich das Schlagzeug auf die Spuren `Kick`, `Snare`, `HiHat` und `Crash` – dieselben Noten, nur getrennt, damit jede Trommel ihr eigenes Instrument und ihren eigenen Platz in der Mischung bekommt. Alle bleiben auf dem General-MIDI-Schlagzeugkanal, und eine Trommel, die das Muster nicht spielt, bekommt keine Spur. Die Muster sind in Trommeln geschrieben, nicht in Noten: `arrangement.drums.notes` (`kick`, `snare`, `closedHiHat`, `openHiHat`, `crash`, `clap`, jeweils 0–127) sagt, auf welcher Note jede Trommel gespielt wird, General MIDI, wenn es fehlt, und ein geteiltes Schlagzeug sortiert nach Trommel, sodass zwei Trommeln auf einer Note trotzdem auf ihren eigenen Spuren landen. Ein Akkordmuster erzeugt die Akkordspur schon im Arrangement, sodass MIDI-Datei und Logic-Projekt dieselben Noten spielen.
 
 Welche Spuren ein Logic-Projekt hat, gibt die Vorlage vor und nicht dieses Werkzeug. Die mitgelieferte hat elf MIDI-Spuren – `Vocal`, `Ins`, `Vocal 8vb`, `Chords`, `Bass`, `Guide`, `Drums` sowie `Kick`, `Snare`, `HiHat` und `Crash` für ein geteiltes Schlagzeug – und drei Audiospuren für die Aufnahme und ihre Stems. Eine Stimme, für die die Vorlage keine Spur hat – etwa eine Dopplung der Instrumentalstimme (`Ins 8vb`) –, landet in der MIDI-Datei, aber nicht im Logic-Projekt; eine Warnung (`YTL053`) weist darauf hin und nennt die Spuren, die die Vorlage hat. Eine eigene Vorlage mit einer passend benannten Spur – siehe *Logic-Pro-Projekt* weiter unten – füllt auch diese.
-
-## Tempo anpassen
-
-YuEs Audio und sein symbolischer Score sind sich nicht immer einig, wie lang der Song ist. Wo der Unterschied Bruchteile eines Prozents beträgt, liegt der Score schlicht ein wenig daneben, und Audio und MIDI laufen gegen Songende auseinander. `--fit-tempo` dehnt das Tempo so, dass der Score genau so lang wird wie die Aufnahme:
-
-```
-Info YTL060: Tempo fitted to the audio: 105 → 105.479 BPM, so the score's 354.3 s become the audio's 352.7 s.
-```
-
-Ein großer Unterschied bedeutet etwas anderes. YuE bricht die Erzeugung an einer Grenze ab – in den Läufen, gegen die das entwickelt wurde, bei 300 oder 360 Sekunden –, das Audio kann also lange vor dem Score enden, in einem Fall 37 Takte früher. Das Tempo anzupassen würde den ganzen Song in eine Länge pressen, die die Musik nie hatte. Mehr als fünf Prozent werden deshalb gemeldet statt angewandt:
-
-```
-Warnung YTL061: The tempo was not fitted: the score lasts 368.1 s but the audio 300.0 s, a difference of
-22.7 %. That is more than a drift; the audio was probably cut short, or it belongs to another take.
-```
-
-`--fit-tempo` braucht die Aufnahme als Maß und gehört deshalb mit `--logic <audio.flac>` zusammen. Das angepasste Tempo erreicht MIDI-Datei, JSON-Ausgabe und Logic-Projekt gleichermaßen, weil es vor allen dreien angewandt wird. Ein Vorzähler bleibt beim Vergleich außen vor: Die Aufnahme enthält die Musik, nicht die Stille davor. Die Bibliothek selbst öffnet keine Datei – der Host misst das Audio und übergibt `fitTempo.audioSeconds`; in der Weboberfläche liest der Browser die 42 Byte des FLAC-Kopfes, für eine reine MIDI-Konvertierung muss also nichts hochgeladen werden.
-
-Die Weboberfläche bietet dasselbe unter *Tempo an die Audiolänge anpassen* an, und `fitTempo.maxDeviation` weitet die fünf Prozent für eine Aufnahme, von der du weißt, dass sie stimmt.
 
 ## Vorzähler
 

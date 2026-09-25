@@ -25,8 +25,6 @@ internal sealed class CliText
     public required string InvalidSwingUnit { get; init; }
     public required string InvalidPercent { get; init; }
     public required string InvalidCountIn { get; init; }
-    public required string FitTempoNeedsAudio { get; init; }
-    public required string AudioUnreadable { get; init; }
     public required string InputNotFound { get; init; }
     public required string OutputExists { get; init; }
     public required string ReadFailed { get; init; }
@@ -126,9 +124,6 @@ internal sealed class CliText
                                       One region per song section in the Logic project, named after it
                   --count-in <n>      Silent bars in front of the song (0 to 8), with a click on every beat
                   --count-in-silent   No click in those bars; implies --count-in 1
-                  --fit-tempo         Adjust the tempo so the score lasts as long as the audio given with
-                                      --logic. A difference of more than 5 percent is reported instead,
-                                      because the recording was then probably cut short
                   --channel <t>=<n>   MIDI channel 1-16 for track t (Vocal, Ins, Chords, Bass, Drums, Guide,
                                       "Vocal 8vb"); repeatable, others get the next free channel
                   --program <t>=<n>   Program change 1-128 sent at the start of track t; repeatable
@@ -167,8 +162,6 @@ internal sealed class CliText
         InvalidSwingUnit = "Unknown swing unit '{0}'; expected one of: {1}.",
         InvalidPercent = "Invalid {0} value '{1}'; expected a whole number between 0 and 100.",
         InvalidCountIn = "Invalid --count-in value '{0}'; expected a whole number between 0 and {1}.",
-        FitTempoNeedsAudio = "--fit-tempo needs the recording to measure: pass it with --logic <audio.flac>.",
-        AudioUnreadable = "The audio file could not be read as FLAC: {0}",
         InputNotFound = "Input file not found: {0}",
         OutputExists = "Output file already exists: {0} (use --force to overwrite)",
         ReadFailed = "Could not read {0}: {1}",
@@ -256,9 +249,6 @@ internal sealed class CliText
                                       Im Logic-Projekt eine Region pro Songabschnitt, nach ihm benannt
                   --count-in <n>      Stille Takte vor dem Song (0 bis 8), mit Klick auf jedem Schlag
                   --count-in-silent   Kein Klick in diesen Takten; schließt --count-in 1 ein
-                  --fit-tempo         Tempo so anpassen, dass der Score so lang ist wie das mit --logic
-                                      angegebene Audio. Mehr als 5 Prozent Abweichung werden stattdessen
-                                      gemeldet, weil die Aufnahme dann vermutlich abgeschnitten ist
                   --channel <s>=<n>   MIDI-Kanal 1-16 für Spur s (Vocal, Ins, Chords, Bass, Drums, Guide,
                                       "Vocal 8vb"); mehrfach möglich, der Rest bekommt den nächsten freien
                   --program <s>=<n>   Programmwechsel 1-128 zu Beginn der Spur s; mehrfach möglich
@@ -298,8 +288,6 @@ internal sealed class CliText
         InvalidSwingUnit = "Unbekannte Swing-Einheit '{0}'; erlaubt sind: {1}.",
         InvalidPercent = "Ungültiger Wert für {0}: '{1}'; erwartet wird eine ganze Zahl zwischen 0 und 100.",
         InvalidCountIn = "Ungültiger Wert für --count-in: '{0}'; erwartet wird eine ganze Zahl zwischen 0 und {1}.",
-        FitTempoNeedsAudio = "--fit-tempo braucht die Aufnahme als Maß: mit --logic <audio.flac> angeben.",
-        AudioUnreadable = "Die Audiodatei konnte nicht als FLAC gelesen werden: {0}",
         InputNotFound = "Eingabedatei nicht gefunden: {0}",
         OutputExists = "Ausgabedatei existiert bereits: {0} (mit --force überschreiben)",
         ReadFailed = "{0} konnte nicht gelesen werden: {1}",

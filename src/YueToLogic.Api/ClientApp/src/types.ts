@@ -110,8 +110,6 @@ export interface ConversionOptions {
     mono: { legato: boolean } | null
     countIn: { bars: number; click: boolean } | null
   }
-  /** Set by the client once an audio file is chosen; the length is read from its FLAC header. */
-  fitTempo: { audioSeconds: number } | null
   /** MIDI channel (1-16) per track name; a track without an entry gets the next free one. */
   midiChannels: Record<string, number>
   /** Program change (1-128) sent at the start of the track, per track name. */

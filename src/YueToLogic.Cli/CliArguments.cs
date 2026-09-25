@@ -95,9 +95,6 @@ internal sealed record CliArguments
     /// <summary>A click on every beat of the count-in.</summary>
     public bool CountInClick { get; init; } = true;
 
-    /// <summary>Fits the tempo to the length of the audio given with <c>--logic</c>.</summary>
-    public bool FitTempo { get; init; }
-
     public bool Force { get; init; }
 
     public bool Verbose { get; init; }
@@ -420,9 +417,6 @@ internal sealed record CliArguments
                 case "--count-in-silent":
                     result = result with { CountInClick = false, CountIn = result.CountIn == 0 ? 1 : result.CountIn };
                     break;
-                case "--fit-tempo":
-                    result = result with { FitTempo = true };
-                    break;
                 case "--track":
                     if (!TryTakeValue(args, ref i, text, out var trackText, out error))
                     {
@@ -495,12 +489,6 @@ internal sealed record CliArguments
         if (!result.IsMidiInput && midiOption is not null)
         {
             error = text.Format(text.OnlyForMidiInput, midiOption);
-            return false;
-        }
-
-        if (result.FitTempo && result.LogicAudioPath is null)
-        {
-            error = text.FitTempoNeedsAudio;
             return false;
         }
 
