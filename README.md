@@ -355,7 +355,7 @@ src/YueToLogic.Core/    Library: ABC parsing, score model, MIDI rendering
 src/YueToLogic.Cli/     Command-line tool (yue2logic)
   Logic/                Logic Pro project writer and the embedded template
 src/YueToLogic.Api/     ASP.NET Core API; serves the web frontend under /ui
-  ClientApp/            Vue 3 + Vite + TypeScript frontend
+  ClientApp/            Vue 3 + Vite + TypeScript frontend (PrimeVue, Tailwind)
   Instruments/          The instrument library in SQLite (the only state the server keeps)
 deploy/                 Docker Compose setup for the server
 Dockerfile              Container image (API + frontend)

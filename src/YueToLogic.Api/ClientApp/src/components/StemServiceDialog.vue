@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, useTemplateRef } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ApiError, deleteStemJob, listStemJobs } from '../api'
 import { formatDateTime, locale, t } from '../i18n'
 import type { StemJob } from '../types'
@@ -21,7 +21,7 @@ const emit = defineEmits<{ deleted: [id: string] }>()
 /** The list is refreshed on its own while the dialog is open; the service's state changes by the minute, not the second. */
 const refreshMilliseconds = 5000
 
-const dialog = useTemplateRef<HTMLDialogElement>('dialog')
+const visible = ref(false)
 const jobs = ref<StemJob[]>([])
 const loading = ref(false)
 /** When the list was last fetched, so that a stale one can be told from a fresh one. */
@@ -38,22 +38,29 @@ const refreshedText = computed(() =>
 
 onUnmounted(() => stop())
 
+// However the dialog is closed (button, Escape, the close icon), the refreshing stops with it.
+watch(visible, (open) => {
+  if (!open) {
+    stop()
+  }
+})
+
 async function open(): Promise<void> {
   error.value = null
-  dialog.value?.showModal()
+  visible.value = true
   await refresh()
   schedule()
 }
 
 function close(): void {
   stop()
-  dialog.value?.close()
+  visible.value = false
 }
 
 function schedule(): void {
   window.clearTimeout(timer)
   timer = window.setTimeout(async () => {
-    if (dialog.value?.open) {
+    if (visible.value) {
       await refresh()
       schedule()
     }
@@ -112,6 +119,20 @@ async function remove(job: StemJob): Promise<void> {
   await refresh()
 }
 
+/** One colour per state, so a full queue is seen before it is read. */
+function statusSeverity(status: string): string {
+  switch (status) {
+    case 'queued':
+      return 'warn'
+    case 'processing':
+      return 'info'
+    case 'failed':
+      return 'danger'
+    default:
+      return 'secondary'
+  }
+}
+
 function statusText(status: string): string {
   switch (status) {
     case 'queued':
@@ -147,17 +168,30 @@ defineExpose({ open })
 </script>
 
 <template>
-  <dialog ref="dialog" class="stem-service-dialog" @cancel.prevent="close">
-    <div class="head">
-      <h3>{{ t('stemServiceTitle') }}</h3>
-      <div class="refresh">
+  <Dialog
+    v-model:visible="visible"
+    modal
+    :header="t('stemServiceTitle')"
+    :draggable="false"
+    :style="{ width: 'min(44rem, calc(100vw - 2rem))' }"
+  >
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <p class="muted m-0 text-sm">{{ t('stemServiceIntro') }}</p>
+      <div class="flex items-center gap-2 text-xs">
         <span class="muted">{{ loading ? t('stemServiceLoading') : refreshedText }}</span>
-        <button type="button" class="button secondary small" :disabled="loading" @click="refresh">{{ t('stemServiceRefresh') }}</button>
+        <Button
+          :label="t('stemServiceRefresh')"
+          icon="pi pi-refresh"
+          :disabled="loading"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="refresh"
+        />
       </div>
     </div>
-    <p class="intro">{{ t('stemServiceIntro') }}</p>
 
-    <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
+    <p v-if="error" class="hint danger mt-0 mb-3" role="alert">{{ error }}</p>
 
     <table v-if="jobs.length > 0">
       <thead>
@@ -168,98 +202,61 @@ defineExpose({ open })
           <th>{{ t('stemServiceCreated') }}</th>
           <th>{{ t('stemServiceUpdated') }}</th>
           <th class="number">{{ t('stemServiceAttempts') }}</th>
-          <th><span class="sr-only">{{ t('stemServiceDelete') }}</span></th>
+          <th>
+            <span class="sr-only">{{ t('stemServiceDelete') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="job in jobs" :key="job.id" :class="{ own: job.id === props.ownJob }">
           <td>
             <code :title="job.id">{{ shortId(job.id) }}</code>
-            <span v-if="job.id === props.ownJob" class="own-mark">{{ t('stemServiceOwn') }}</span>
-            <span v-if="job.lastError" class="error">{{ job.lastError }}</span>
+            <span v-if="job.id === props.ownJob" class="muted block text-xs">{{ t('stemServiceOwn') }}</span>
+            <span v-if="job.lastError" class="error block max-w-96 text-xs">{{ job.lastError }}</span>
           </td>
-          <td class="model">{{ job.model ?? '–' }}</td>
-          <td><span class="status" :class="job.status">{{ statusText(job.status) }}</span></td>
+          <td class="model text-xs">{{ job.model ?? '–' }}</td>
+          <td>
+            <Tag
+              :severity="statusSeverity(job.status)"
+              :value="statusText(job.status)"
+              rounded
+              class="whitespace-nowrap"
+            />
+          </td>
           <td class="time">{{ when(job.createdUtc) }}</td>
           <td class="time">{{ when(job.updatedUtc) }}</td>
           <td class="number">{{ job.attempts }}</td>
-          <td class="actions">
-            <button
-              v-if="job.status === 'processing'"
-              type="button"
-              class="link"
-              disabled
-              :title="t('stemServiceLocked')"
-            >
-              {{ t('stemServiceDelete') }}
-            </button>
-            <button v-else type="button" class="link" :disabled="removing !== null" @click="remove(job)">
-              {{ job.status === 'queued' ? t('stemServiceCancel') : t('stemServiceDelete') }}
-            </button>
+          <td class="text-right whitespace-nowrap">
+            <!-- A disabled button shows no tooltip of its own, so the wrapper carries why it is locked. -->
+            <span v-if="job.status === 'processing'" v-tooltip.left="t('stemServiceLocked')" class="inline-block">
+              <Button :label="t('stemServiceDelete')" link size="small" disabled />
+            </span>
+            <Button
+              v-else
+              :label="job.status === 'queued' ? t('stemServiceCancel') : t('stemServiceDelete')"
+              link
+              size="small"
+              :disabled="removing !== null"
+              :loading="removing === job.id"
+              @click="remove(job)"
+            />
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-else-if="!error" class="muted empty">{{ loading && !refreshedAt ? t('stemServiceLoading') : t('stemServiceEmpty') }}</p>
+    <p v-else-if="!error" class="muted mt-0 mb-3 text-sm">
+      {{ loading && !refreshedAt ? t('stemServiceLoading') : t('stemServiceEmpty') }}
+    </p>
 
-    <div class="choices">
-      <button type="button" class="button secondary" @click="close">{{ t('stemServiceClose') }}</button>
-    </div>
-  </dialog>
+    <template #footer>
+      <Button :label="t('stemServiceClose')" severity="secondary" outlined @click="close" />
+    </template>
+  </Dialog>
 </template>
 
 <style scoped>
-.stem-service-dialog {
-  width: min(44rem, calc(100vw - 2rem));
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.stem-service-dialog::backdrop {
-  background: rgb(0 0 0 / 50%);
-}
-
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
-h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.refresh {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.8rem;
-}
-
-.button.small {
-  padding: 0.3rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.intro {
-  margin: 0.35rem 0 1rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.hint {
-  margin: 0 0 0.75rem;
-}
-
 table {
   width: 100%;
-  margin-bottom: 1rem;
   border-collapse: collapse;
 }
 
@@ -287,43 +284,7 @@ code {
   font-size: 0.85rem;
 }
 
-.model {
-  font-size: 0.8rem;
-}
-
-.own-mark {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
 .error {
-  display: block;
-  max-width: 24rem;
-  color: var(--danger);
-  font-size: 0.8rem;
-}
-
-/* One colour per state, so a full queue is seen before it is read. */
-.status {
-  display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.status.queued {
-  color: var(--warning-text);
-}
-
-.status.processing {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.status.failed {
   color: var(--danger);
 }
 
@@ -333,27 +294,6 @@ code {
 
 .number {
   text-align: right;
-}
-
-.actions {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.link:disabled {
-  color: var(--text-muted);
-  cursor: not-allowed;
-  text-decoration: none;
-}
-
-.empty {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-}
-
-.choices {
-  display: flex;
-  justify-content: flex-end;
 }
 
 @media (max-width: 40rem) {

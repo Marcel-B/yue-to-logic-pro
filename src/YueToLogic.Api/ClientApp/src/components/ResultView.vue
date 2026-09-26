@@ -62,7 +62,11 @@ const timeline = computed(() => {
   }
   return doc.sections.map((section, index) => {
     const end = doc.sections[index + 1]?.startTicks ?? doc.lengthTicks
-    return { name: section.name, bar: barAt(doc, section.startTicks), width: ((end - section.startTicks) / doc.lengthTicks) * 100 }
+    return {
+      name: section.name,
+      bar: barAt(doc, section.startTicks),
+      width: ((end - section.startTicks) / doc.lengthTicks) * 100,
+    }
   })
 })
 
@@ -71,9 +75,14 @@ const tracks = computed(() => {
   if (!doc) {
     return []
   }
-  const melodies = doc.voices.filter((v) => v.kind === 'Melody').map((v) => ({ name: v.id, detail: t('notes', { count: v.notes.length }) }))
-  const generated = doc.voices.filter((v) => v.kind !== 'Melody').map((v) => ({ name: v.id, detail: t('notes', { count: v.notes.length }) }))
-  const chords = doc.chords.length > 0 ? [{ name: t('chordTrack'), detail: t('chords', { count: doc.chords.length }) }] : []
+  const melodies = doc.voices
+    .filter((v) => v.kind === 'Melody')
+    .map((v) => ({ name: v.id, detail: t('notes', { count: v.notes.length }) }))
+  const generated = doc.voices
+    .filter((v) => v.kind !== 'Melody')
+    .map((v) => ({ name: v.id, detail: t('notes', { count: v.notes.length }) }))
+  const chords =
+    doc.chords.length > 0 ? [{ name: t('chordTrack'), detail: t('chords', { count: doc.chords.length }) }] : []
   return [...melodies, ...chords, ...generated]
 })
 
@@ -107,115 +116,125 @@ function downloadJson(): void {
 </script>
 
 <template>
-  <section class="card" :class="{ failed: !result.success }" aria-live="polite">
-    <h2>{{ result.success ? t('resultTitle') : t('failedTitle') }}</h2>
+  <Card aria-live="polite">
+    <template #title>
+      <span :class="{ 'text-(--danger)': !result.success }">
+        {{ result.success ? t('resultTitle') : t('failedTitle') }}
+      </span>
+    </template>
+    <template #content>
+      <Message v-if="stale" severity="warn" size="small">{{ t('stale') }}</Message>
 
-    <p v-if="stale" class="hint warning">{{ t('stale') }}</p>
+      <template v-if="score">
+        <dl class="facts">
+          <div>
+            <dt>{{ t('tempo') }}</dt>
+            <dd>{{ formatNumber(score.tempoBpm, 2) }} BPM</dd>
+          </div>
+          <div>
+            <dt>{{ t('meter') }}</dt>
+            <dd>{{ meters(score) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('key') }}</dt>
+            <dd>{{ score.keySignatures.map((k) => k.key).join(', ') }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('length') }}</dt>
+            <dd>{{ t('lengthValue', { bars: barCount(score), duration: formatDuration(score.durationSeconds) }) }}</dd>
+          </div>
+        </dl>
 
-    <template v-if="score">
-      <dl class="facts">
-        <div>
-          <dt>{{ t('tempo') }}</dt>
-          <dd>{{ formatNumber(score.tempoBpm, 2) }} BPM</dd>
+        <h3>{{ t('sections') }}</h3>
+        <div v-if="timeline.length" class="timeline" role="list">
+          <div
+            v-for="(section, index) in timeline"
+            :key="index"
+            class="segment"
+            role="listitem"
+            :style="{ flexGrow: section.width }"
+            :title="`${section.name} · ${t('bar', { bar: section.bar })}`"
+          >
+            <span class="segment-name">{{ section.name }}</span>
+            <span class="segment-bar">{{ section.bar }}</span>
+          </div>
         </div>
-        <div>
-          <dt>{{ t('meter') }}</dt>
-          <dd>{{ meters(score) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('key') }}</dt>
-          <dd>{{ score.keySignatures.map((k) => k.key).join(', ') }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('length') }}</dt>
-          <dd>{{ t('lengthValue', { bars: barCount(score), duration: formatDuration(score.durationSeconds) }) }}</dd>
-        </div>
-      </dl>
+        <p v-else class="muted">{{ t('noSections') }}</p>
 
-      <h3>{{ t('sections') }}</h3>
-      <div v-if="timeline.length" class="timeline" role="list">
-        <div
-          v-for="(section, index) in timeline"
-          :key="index"
-          class="segment"
-          role="listitem"
-          :style="{ flexGrow: section.width }"
-          :title="`${section.name} · ${t('bar', { bar: section.bar })}`"
-        >
-          <span class="segment-name">{{ section.name }}</span>
-          <span class="segment-bar">{{ section.bar }}</span>
-        </div>
-      </div>
-      <p v-else class="muted">{{ t('noSections') }}</p>
-
-      <h3>{{ t('trackList') }}</h3>
-      <ul class="tracks">
-        <li v-for="track in tracks" :key="track.name">
-          <span>{{ track.name }}</span>
-          <span class="muted">{{ track.detail }}</span>
-        </li>
-      </ul>
-
-      <div class="actions">
-        <button type="button" class="button primary" :disabled="!result.midi" @click="downloadMidi">
-          {{ t('downloadMidi') }}
-        </button>
-        <button type="button" class="button secondary" @click="downloadJson">{{ t('downloadJson') }}</button>
-        <button
-          type="button"
-          class="button secondary"
-          :disabled="logicBusy"
-          :title="logicNote"
-          @click="emit('exportLogic')"
-        >
-          {{ logicLabel }}
-        </button>
-      </div>
-      <p class="hint muted">{{ logicNote }}</p>
-      <p v-if="logicError" class="hint danger" role="alert">{{ logicError }}</p>
-      <div v-if="logicWarnings.length" class="logic-warnings">
-        <h3>{{ t('logicWarnings') }}</h3>
-        <ul class="diagnostics">
-          <li v-for="(diagnostic, index) in logicWarnings" :key="index" :class="diagnostic.severity.toLowerCase()">
-            <span class="badge">{{ severityLabel(diagnostic) }}</span>
-            <span class="code">{{ diagnostic.code }}</span>
-            <span class="message">{{ diagnostic.message }}</span>
+        <h3>{{ t('trackList') }}</h3>
+        <ul class="tracks">
+          <li v-for="track in tracks" :key="track.name">
+            <span>{{ track.name }}</span>
+            <span class="muted">{{ track.detail }}</span>
           </li>
         </ul>
-      </div>
-    </template>
 
-    <h3>{{ t('diagnostics') }}</h3>
-    <p v-if="result.diagnostics.length === 0" class="muted">{{ t('noDiagnostics') }}</p>
-    <ul v-if="important.length" class="diagnostics">
-      <li v-for="(diagnostic, index) in important" :key="index" :class="diagnostic.severity.toLowerCase()">
-        <span class="badge">{{ severityLabel(diagnostic) }}</span>
-        <span class="code">{{ diagnostic.code }}</span>
-        <span v-if="location(diagnostic)" class="muted">{{ location(diagnostic) }}</span>
-        <span class="message">{{ diagnostic.message }}</span>
-      </li>
-    </ul>
-    <template v-if="infos.length">
-      <button v-if="!showInfos" type="button" class="link" @click="showInfos = true">
-        {{ t('showInfos', { count: infos.length }) }}
-      </button>
-      <ul v-else class="diagnostics">
-        <li v-for="(diagnostic, index) in infos" :key="index" class="info">
+        <div class="flex flex-wrap gap-2 mt-5">
+          <Button :label="t('downloadMidi')" icon="pi pi-download" :disabled="!result.midi" @click="downloadMidi" />
+          <Button
+            :label="t('downloadJson')"
+            icon="pi pi-download"
+            severity="secondary"
+            outlined
+            @click="downloadJson"
+          />
+          <Button
+            :label="logicLabel"
+            icon="pi pi-box"
+            severity="secondary"
+            outlined
+            :loading="logicBusy"
+            :disabled="logicBusy"
+            @click="emit('exportLogic')"
+          />
+        </div>
+        <p class="hint muted">{{ logicNote }}</p>
+        <p v-if="logicError" class="hint danger" role="alert">{{ logicError }}</p>
+        <div v-if="logicWarnings.length" class="logic-warnings">
+          <h3>{{ t('logicWarnings') }}</h3>
+          <ul class="diagnostics">
+            <li v-for="(diagnostic, index) in logicWarnings" :key="index" :class="diagnostic.severity.toLowerCase()">
+              <span class="badge">{{ severityLabel(diagnostic) }}</span>
+              <span class="code">{{ diagnostic.code }}</span>
+              <span class="message">{{ diagnostic.message }}</span>
+            </li>
+          </ul>
+        </div>
+      </template>
+
+      <h3>{{ t('diagnostics') }}</h3>
+      <p v-if="result.diagnostics.length === 0" class="muted">{{ t('noDiagnostics') }}</p>
+      <ul v-if="important.length" class="diagnostics">
+        <li v-for="(diagnostic, index) in important" :key="index" :class="diagnostic.severity.toLowerCase()">
           <span class="badge">{{ severityLabel(diagnostic) }}</span>
           <span class="code">{{ diagnostic.code }}</span>
           <span v-if="location(diagnostic)" class="muted">{{ location(diagnostic) }}</span>
           <span class="message">{{ diagnostic.message }}</span>
         </li>
       </ul>
+      <template v-if="infos.length">
+        <Button
+          v-if="!showInfos"
+          :label="t('showInfos', { count: infos.length })"
+          link
+          size="small"
+          class="px-0"
+          @click="showInfos = true"
+        />
+        <ul v-else class="diagnostics">
+          <li v-for="(diagnostic, index) in infos" :key="index" class="info">
+            <span class="badge">{{ severityLabel(diagnostic) }}</span>
+            <span class="code">{{ diagnostic.code }}</span>
+            <span v-if="location(diagnostic)" class="muted">{{ location(diagnostic) }}</span>
+            <span class="message">{{ diagnostic.message }}</span>
+          </li>
+        </ul>
+      </template>
     </template>
-  </section>
+  </Card>
 </template>
 
 <style scoped>
-.failed {
-  border-color: var(--danger);
-}
-
 h3 {
   margin: 1.25rem 0 0.5rem;
   font-size: 0.95rem;

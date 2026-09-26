@@ -3,16 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import { t } from '../i18n'
 import { effectiveRouting, instrumentOf } from '../instruments'
 import { loadRoutings, saveRoutings } from '../options'
-import {
-  contentHeight,
-  draw,
-  GUTTER_WIDTH,
-  lanesOf,
-  ticksAtX,
-  totalWidth,
-  trackColour,
-  xAtTicks,
-} from '../pianoRoll'
+import { contentHeight, draw, GUTTER_WIDTH, lanesOf, ticksAtX, totalWidth, trackColour, xAtTicks } from '../pianoRoll'
 import {
   AUDIO_OUTPUT,
   createPlayer,
@@ -80,7 +71,17 @@ const effective = computed(() =>
 )
 
 const pool = new OutputPool(null)
-const channels = Array.from({ length: 16 }, (_, index) => index)
+/** Channels are 0-based in the routing and shown 1-based, as every MIDI device labels them. */
+const channels = Array.from({ length: 16 }, (_, index) => ({ label: `${index + 1}`, value: index }))
+/** The browser's own synth first, then whatever MIDI outputs are known right now. */
+const outputs = computed(() => [
+  { label: t('previewOutputAudio'), value: AUDIO_OUTPUT },
+  ...ports.value.map((port) => ({ label: port.name, value: port.id })),
+])
+const instrumentOptions = computed(() => [
+  { label: t('previewInstrumentNone'), value: null as number | null },
+  ...props.instruments.map((instrument) => ({ label: instrument.name, value: instrument.id as number | null })),
+])
 let player: Player | null = null
 let frame = 0
 let scrollTicks = 0
@@ -151,11 +152,19 @@ function release(): void {
 
 function play(fromTicks = playhead.value ?? 0): void {
   if (!player) {
-    player = createPlayer(scheduleOf(props.score, voices.value, effective.value.map((entry) => entry.routing)), pool, () => {
-      playing.value = false
-      playhead.value = null
-      render()
-    })
+    player = createPlayer(
+      scheduleOf(
+        props.score,
+        voices.value,
+        effective.value.map((entry) => entry.routing),
+      ),
+      pool,
+      () => {
+        playing.value = false
+        playhead.value = null
+        render()
+      },
+    )
   }
   player.play(fromTicks * secondsPerTick.value)
   playing.value = true
@@ -303,9 +312,8 @@ watch(
   },
 )
 
-function assign(track: string, event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
-  emit('assign', track, value === '' ? null : Number(value))
+function assign(track: string, instrumentId: number | null): void {
+  emit('assign', track, instrumentId)
 }
 
 // Zooming keeps the bar at the left edge in place; the raw scroll offset would otherwise jump to a
@@ -324,262 +332,229 @@ watch([large, viewportWidth], () => requestAnimationFrame(onScroll))
 </script>
 
 <template>
-  <section class="card preview" :class="{ large }">
-    <div class="head">
-      <h2>{{ t('previewTitle') }}</h2>
-      <div class="controls">
-        <button type="button" class="button primary small" :aria-pressed="playing" @click="toggle">
-          {{ playing ? t('previewStop') : t('previewPlay') }}
-        </button>
-        <button
-          type="button"
-          class="button secondary small"
-          :title="t('previewRewindTitle')"
-          :disabled="!playing && !playhead"
-          @click="rewind"
-        >
-          {{ t('previewRewind') }}
-        </button>
-        <button type="button" class="button secondary small" :title="t('previewPanicTitle')" @click="panic">
-          {{ t('previewPanic') }}
-        </button>
-        <label class="field zoom" :title="t('previewZoom')">
-          <span class="sr-only">{{ t('previewZoom') }}</span>
-          <input v-model.number="pxPerBar" type="range" min="6" max="120" step="2" />
-        </label>
-        <button type="button" class="button secondary small" :aria-pressed="large" @click="large = !large">
-          {{ large ? t('previewSmaller') : t('previewLarger') }}
-        </button>
+  <!--
+    min-w-0: a grid item will not shrink below its content by default, and the content here is the whole song - at
+    204 bars well over 6000 pixels, which would drag the entire page wide. This keeps the card inside the column.
+  -->
+  <Card class="min-w-0" :class="{ 'fixed inset-4 z-20 overflow-auto shadow-2xl': large }">
+    <template #title>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="m-0">{{ t('previewTitle') }}</h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            size="small"
+            :icon="playing ? 'pi pi-stop' : 'pi pi-play'"
+            :label="playing ? t('previewStop') : t('previewPlay')"
+            :aria-pressed="playing"
+            @click="toggle"
+          />
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            icon="pi pi-step-backward"
+            :label="t('previewRewind')"
+            :title="t('previewRewindTitle')"
+            :disabled="!playing && !playhead"
+            @click="rewind"
+          />
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            :label="t('previewPanic')"
+            :title="t('previewPanicTitle')"
+            @click="panic"
+          />
+          <div class="w-32 px-2" :title="t('previewZoom')">
+            <Slider
+              :model-value="pxPerBar"
+              :min="6"
+              :max="120"
+              :step="2"
+              :aria-label="t('previewZoom')"
+              @update:model-value="pxPerBar = $event as number"
+            />
+          </div>
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            :icon="large ? 'pi pi-window-minimize' : 'pi pi-window-maximize'"
+            :label="large ? t('previewSmaller') : t('previewLarger')"
+            :aria-pressed="large"
+            @click="large = !large"
+          />
+        </div>
       </div>
-    </div>
+    </template>
 
-    <p v-if="stale" class="hint warning">{{ t('stale') }}</p>
+    <template #content>
+      <p v-if="stale" class="hint warning mt-0">{{ t('stale') }}</p>
 
-    <div ref="viewport" class="viewport" @scroll.passive="onScroll" @click="seek">
-      <div class="content" :style="{ width: `${contentWidth}px`, height: `${height}px` }">
-        <canvas ref="canvas" :style="{ width: `${viewportWidth}px`, height: `${height}px` }" />
-      </div>
-    </div>
-
-    <details class="routing" open>
-      <summary>{{ t('previewRouting') }}</summary>
-
-      <div class="bulk">
-        <button v-if="canAskForMidi" type="button" class="button secondary small" @click="loadPorts">
-          {{ t('previewFindMidi') }}
-        </button>
-        <button type="button" class="button secondary small" @click="emit('manageInstruments')">
-          {{ t('instrumentsManage') }}
-        </button>
-        <label class="field">
-          {{ t('previewRouteAll') }}
-          <select @change="routeAll(($event.target as HTMLSelectElement).value)">
-            <option value="">{{ t('previewRouteAllPick') }}</option>
-            <option :value="AUDIO_OUTPUT">{{ t('previewOutputAudio') }}</option>
-            <option v-for="port in ports" :key="port.id" :value="port.id">{{ port.name }}</option>
-          </select>
-        </label>
+      <div ref="viewport" class="viewport" @scroll.passive="onScroll" @click="seek">
+        <div :style="{ width: `${contentWidth}px`, height: `${height}px` }">
+          <canvas ref="canvas" :style="{ width: `${viewportWidth}px`, height: `${height}px` }" />
+        </div>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>{{ t('previewTrack') }}</th>
-            <th v-if="hasInstruments">{{ t('previewInstrument') }}</th>
-            <th>{{ t('previewOutput') }}</th>
-            <th>{{ t('previewChannel') }}</th>
-            <th><span class="sr-only">{{ t('previewTest') }}</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(routing, index) in routings" :key="trackIds[index]" :class="{ muted: routing.muted }">
-            <td>
-              <label class="track">
-                <input v-model="routing.muted" type="checkbox" :true-value="false" :false-value="true" />
-                <span class="swatch" :style="{ background: trackColour(index) }" />
-                {{ trackIds[index] }}
-              </label>
-            </td>
-            <td v-if="hasInstruments" class="instrument">
-              <select :value="effective[index]?.instrument?.id ?? ''" @change="assign(trackIds[index]!, $event)">
-                <option value="">{{ t('previewInstrumentNone') }}</option>
-                <option v-for="instrument in instruments" :key="instrument.id" :value="instrument.id">{{ instrument.name }}</option>
-              </select>
-            </td>
-            <template v-if="effective[index]?.instrument">
-              <td v-if="effective[index]?.port" class="fixed">{{ effective[index]?.port?.name }}</td>
-              <!-- Without Web MIDI no port is ever found, so naming one that is missing would be misleading. -->
-              <td v-else-if="!canDrivePorts" class="fixed muted">{{ effective[index]?.instrument?.port }}</td>
-              <td v-else class="fixed warning">{{ t('previewInstrumentMissing', { port: effective[index]?.instrument?.port ?? '' }) }}</td>
-              <td class="channel fixed">{{ effective[index]!.routing.channel + 1 }}</td>
-            </template>
-            <template v-else>
-              <td>
-                <select v-model="routing.output">
-                  <option :value="AUDIO_OUTPUT">{{ t('previewOutputAudio') }}</option>
-                  <option v-for="port in ports" :key="port.id" :value="port.id">{{ port.name }}</option>
-                </select>
-              </td>
-              <td class="channel">
-                <select v-model.number="routing.channel" :disabled="routing.output === AUDIO_OUTPUT">
-                  <option v-for="channel in channels" :key="channel" :value="channel">{{ channel + 1 }}</option>
-                </select>
-              </td>
-            </template>
-            <td>
-              <button
-                type="button"
-                class="button secondary small"
-                @click="testTone(pool, effective[index]!.routing, voices[index]?.kind === 'Drums')"
-              >
-                {{ t('previewTest') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </details>
+      <Panel :header="t('previewRouting')" toggleable class="mt-3">
+        <div class="mb-2 flex flex-wrap items-center gap-3">
+          <Button
+            v-if="canAskForMidi"
+            size="small"
+            severity="secondary"
+            outlined
+            :label="t('previewFindMidi')"
+            @click="loadPorts"
+          />
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            :label="t('instrumentsManage')"
+            @click="emit('manageInstruments')"
+          />
+          <div class="flex items-center gap-2 text-sm text-muted-color">
+            <label id="preview-route-all">{{ t('previewRouteAll') }}</label>
+            <!-- An action rather than a setting: it always shows the prompt, and picking an output applies it. -->
+            <Select
+              :model-value="null"
+              :options="outputs"
+              option-label="label"
+              option-value="value"
+              :placeholder="t('previewRouteAllPick')"
+              aria-labelledby="preview-route-all"
+              size="small"
+              @update:model-value="routeAll"
+            />
+          </div>
+        </div>
 
-    <p class="muted hint">{{ note ?? (hasInstruments ? t('previewInstrumentHint') : t('previewHint')) }}</p>
-  </section>
+        <div class="relative overflow-x-auto">
+          <table class="w-full border-collapse text-sm">
+            <thead>
+              <tr class="text-left text-xs text-muted-color">
+                <th class="py-1.5 pr-2 font-medium">{{ t('previewTrack') }}</th>
+                <th v-if="hasInstruments" class="py-1.5 pr-2 font-medium">{{ t('previewInstrument') }}</th>
+                <th class="py-1.5 pr-2 font-medium">{{ t('previewOutput') }}</th>
+                <th class="py-1.5 pr-2 font-medium">{{ t('previewChannel') }}</th>
+                <th class="py-1.5 font-medium">
+                  <span class="sr-only">{{ t('previewTest') }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(routing, index) in routings" :key="trackIds[index]" :class="{ 'opacity-50': routing.muted }">
+                <td class="py-1 pr-2 align-middle">
+                  <div class="flex items-center gap-2 whitespace-nowrap">
+                    <Checkbox
+                      v-model="routing.muted"
+                      binary
+                      :true-value="false"
+                      :false-value="true"
+                      :input-id="`preview-track-${index}`"
+                    />
+                    <span class="swatch" :style="{ background: trackColour(index) }" />
+                    <label :for="`preview-track-${index}`" class="cursor-pointer">{{ trackIds[index] }}</label>
+                  </div>
+                </td>
+                <td v-if="hasInstruments" class="py-1 pr-2 align-middle">
+                  <Select
+                    :model-value="effective[index]?.instrument?.id ?? null"
+                    :options="instrumentOptions"
+                    option-label="label"
+                    option-value="value"
+                    :placeholder="t('previewInstrumentNone')"
+                    :aria-label="`${t('previewInstrument')} ${trackIds[index]}`"
+                    size="small"
+                    class="w-full min-w-32"
+                    @update:model-value="assign(trackIds[index]!, $event)"
+                  />
+                </td>
+                <template v-if="effective[index]?.instrument">
+                  <td v-if="effective[index]?.port" class="whitespace-nowrap py-1 pr-2 align-middle">
+                    {{ effective[index]?.port?.name }}
+                  </td>
+                  <!-- Without Web MIDI no port is ever found, so naming one that is missing would be misleading. -->
+                  <td v-else-if="!canDrivePorts" class="muted whitespace-nowrap py-1 pr-2 align-middle">
+                    {{ effective[index]?.instrument?.port }}
+                  </td>
+                  <td v-else class="py-1 pr-2 align-middle text-(--warning-text)">
+                    {{ t('previewInstrumentMissing', { port: effective[index]?.instrument?.port ?? '' }) }}
+                  </td>
+                  <td class="whitespace-nowrap py-1 pr-2 align-middle">{{ effective[index]!.routing.channel + 1 }}</td>
+                </template>
+                <template v-else>
+                  <td class="py-1 pr-2 align-middle">
+                    <Select
+                      v-model="routing.output"
+                      :options="outputs"
+                      option-label="label"
+                      option-value="value"
+                      :aria-label="`${t('previewOutput')} ${trackIds[index]}`"
+                      size="small"
+                      class="w-full min-w-32"
+                    />
+                  </td>
+                  <td class="py-1 pr-2 align-middle">
+                    <Select
+                      v-model="routing.channel"
+                      :options="channels"
+                      option-label="label"
+                      option-value="value"
+                      :disabled="routing.output === AUDIO_OUTPUT"
+                      :aria-label="`${t('previewChannel')} ${trackIds[index]}`"
+                      size="small"
+                      class="w-20"
+                    />
+                  </td>
+                </template>
+                <td class="py-1 align-middle">
+                  <Button
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    :label="t('previewTest')"
+                    @click="testTone(pool, effective[index]!.routing, voices[index]?.kind === 'Drums')"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <p class="muted hint">{{ note ?? (hasInstruments ? t('previewInstrumentHint') : t('previewHint')) }}</p>
+    </template>
+  </Card>
 </template>
 
 <style scoped>
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.head h2 {
-  margin: 0;
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.zoom input {
-  width: 8rem;
-}
-
-/*
- * A grid item will not shrink below its content by default, and the content here is the whole song - at 204
- * bars well over 6000 pixels, which would drag the entire page wide. This keeps the card inside the column.
- */
-.preview {
-  min-width: 0;
-}
-
 /*
  * The content element carries the scrollable width; the canvas sticks to the left edge of the scrollport and
- * is only as wide as what is visible, so a long song costs no extra pixels.
+ * is only as wide as what is visible, so a long song costs no extra pixels. The piano roll reads its colours
+ * (--text, --border, --accent, ...) from the canvas's computed style, which inherits them from :root.
  */
 .viewport {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  margin-top: 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
   cursor: crosshair;
 }
 
-.content canvas {
+.viewport canvas {
   position: sticky;
   left: 0;
   display: block;
 }
 
-.routing {
-  margin-top: 0.75rem;
-}
-
-.routing summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.bulk {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0.75rem 0 0.25rem;
-}
-
-.bulk .field {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-muted);
-  font-size: 0.875rem;
-}
-
-.routing table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.routing th {
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  text-align: left;
-}
-
-.routing td {
-  padding: 0.2rem 0.5rem 0.2rem 0;
-  vertical-align: middle;
-}
-
-.routing tr.muted {
-  opacity: 0.5;
-}
-
-.track {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  white-space: nowrap;
-}
-
 .swatch {
+  flex: none;
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 3px;
-}
-
-.routing select {
-  width: 100%;
-  min-width: 0;
-}
-
-.routing td.channel select {
-  width: 4.5rem;
-}
-
-.routing td.fixed {
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
-.routing td.warning {
-  color: var(--warning-text);
-  white-space: normal;
-}
-
-.preview.large {
-  position: fixed;
-  inset: 1rem;
-  z-index: 20;
-  overflow: auto;
-  box-shadow: 0 1.5rem 3rem rgb(0 0 0 / 0.25);
 }
 </style>

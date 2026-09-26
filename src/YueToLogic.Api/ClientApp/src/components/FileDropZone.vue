@@ -74,8 +74,8 @@ function formatSize(bytes: number): string {
     tabindex="0"
     :aria-label="t('chooseFile')"
     @click="openDialog"
-    @keydown.enter.prevent="openDialog"
-    @keydown.space.prevent="openDialog"
+    @keydown.enter.self.prevent="openDialog"
+    @keydown.space.self.prevent="openDialog"
     @dragenter.prevent="dragDepth++"
     @dragover.prevent
     @dragleave.prevent="dragDepth = Math.max(0, dragDepth - 1)"
@@ -90,22 +90,33 @@ function formatSize(bytes: number): string {
     <template v-else-if="file">
       <p class="headline file-name">{{ file.name }}</p>
       <p class="muted">{{ formatSize(file.size) }}</p>
-      <span class="links">
-        <span class="link">{{ t('otherFile') }}</span>
-        <button type="button" class="link" @click.stop="emit('clear')">{{ t('removeFile') }}</button>
+      <span class="flex gap-2">
+        <Button :label="t('otherFile')" link size="small" @click.stop="openDialog" />
+        <Button :label="t('removeFile')" link size="small" severity="danger" @click.stop="emit('clear')" />
       </span>
     </template>
     <template v-else>
-      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 16V4m0 0L7 9m5-5 5 5M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
-      </svg>
+      <i class="pi pi-upload icon" aria-hidden="true" />
       <p class="headline">{{ dropHint }}</p>
       <p class="muted">{{ t('dropOr') }}</p>
-      <span class="links buttons">
-        <span class="button secondary">{{ t('chooseFile') }}</span>
-        <button v-if="folders" type="button" class="button secondary" @click.stop="openFolderDialog">
-          {{ t('chooseFolder') }}
-        </button>
+      <span class="flex flex-wrap justify-center gap-2 mt-1">
+        <Button
+          :label="t('chooseFile')"
+          icon="pi pi-file"
+          severity="secondary"
+          outlined
+          size="small"
+          @click.stop="openDialog"
+        />
+        <Button
+          v-if="folders"
+          :label="t('chooseFolder')"
+          icon="pi pi-folder-open"
+          severity="secondary"
+          outlined
+          size="small"
+          @click.stop="openFolderDialog"
+        />
       </span>
     </template>
   </div>
@@ -118,7 +129,7 @@ function formatSize(bytes: number): string {
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface-sunken);
@@ -158,29 +169,8 @@ function formatSize(bytes: number): string {
   margin: 0;
 }
 
-.buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.links {
-  display: flex;
-  gap: 1rem;
-}
-
 .icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.button {
-  margin-top: 0.4rem;
+  color: var(--accent);
+  font-size: 2rem;
 }
 </style>

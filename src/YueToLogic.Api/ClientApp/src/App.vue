@@ -23,13 +23,23 @@ import StemServiceDialog from './components/StemServiceDialog.vue'
 import VoiceDialog from './components/VoiceDialog.vue'
 import VoiceJobsDialog from './components/VoiceJobsDialog.vue'
 import VoicePanel from './components/VoicePanel.vue'
+import InputGroup from 'primevue/inputgroup'
+import InputGroupAddon from 'primevue/inputgroupaddon'
 import type { SongFolder } from './folder'
 import { locale, setLocale, t } from './i18n'
 import { instrumentsForExport, withDrumNotes, withInstrumentChannels } from './instruments'
 import { deletePreset, loadPresets, savePreset, type Preset } from './presets'
 import { clearFormState, defaultFormState, loadFormState, saveFormState, toConversionOptions } from './options'
 import { baseName, download } from './score'
-import { STEMS_NOT_TAKEN, VOICE_NOT_TAKEN, type Assignments, type ConversionResult, type Diagnostic, type Instrument, type ReferenceVoice } from './types'
+import {
+  STEMS_NOT_TAKEN,
+  VOICE_NOT_TAKEN,
+  type Assignments,
+  type ConversionResult,
+  type Diagnostic,
+  type Instrument,
+  type ReferenceVoice,
+} from './types'
 
 const file = ref<File | null>(null)
 const audio = ref<File | null>(null)
@@ -116,7 +126,9 @@ async function loadInstruments(): Promise<void> {
     ;[instruments.value, assignments.value] = await Promise.all([listInstruments(), listAssignments()])
   } catch (caught) {
     // Without the library everything else still works; the routing table then shows ports and channels only.
-    instrumentsError.value = t('instrumentsError', { message: caught instanceof Error ? caught.message : String(caught) })
+    instrumentsError.value = t('instrumentsError', {
+      message: caught instanceof Error ? caught.message : String(caught),
+    })
   }
 }
 
@@ -187,7 +199,9 @@ async function withPresets(change: () => Promise<Preset[]>): Promise<boolean> {
   }
 }
 
-function applyPreset(): void {
+function applyPreset(name: string | null): void {
+  // The select's clear button hands over null; no preset chosen is an empty name, as before.
+  presetName.value = name ?? ''
   const preset = presets.value.find((entry) => entry.name === presetName.value)
   if (preset) {
     form.value = { ...preset.form }
@@ -309,6 +323,14 @@ async function exportLogic(): Promise<void> {
   }
 }
 
+/** Lets a card's content grow, so the drop zones of both file cards end on the same line. */
+const fillCard = { body: { class: 'flex-1' }, content: { class: 'flex flex-col flex-1' } }
+
+const locales = [
+  { label: 'DE', value: 'de' },
+  { label: 'EN', value: 'en' },
+] as const
+
 /** Back to a fresh start: no files, default parameters, no result. The language is kept. */
 function reset(): void {
   pending?.abort()
@@ -375,173 +397,208 @@ async function convert(): Promise<void> {
 
 <template>
   <header class="page-header">
-    <div>
+    <div class="min-w-0">
       <h1>YuE <span aria-hidden="true">→</span> Logic</h1>
-      <p class="muted">{{ t('subtitle') }}</p>
+      <p class="muted m-0 mt-1">{{ t('subtitle') }}</p>
     </div>
-    <div class="header-actions">
-      <div class="tools" role="group">
-        <!-- Icons rather than words: the header stays one line, and the title says what each one opens. -->
-        <button type="button" class="icon-button" :title="t('instrumentsManageTitle')" :aria-label="t('instrumentsManage')" @click="openInstruments">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="18" x2="20" y2="18" />
-            <circle cx="9" cy="6" r="2" />
-            <circle cx="15" cy="12" r="2" />
-            <circle cx="7" cy="18" r="2" />
-          </svg>
-        </button>
-        <button
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Icons rather than words: the header stays one line, and the tooltip says what each one opens. -->
+      <div class="flex gap-1" role="group">
+        <Button
+          icon="pi pi-sliders-h"
+          severity="secondary"
+          text
+          rounded
+          :aria-label="t('instrumentsManage')"
+          v-tooltip.bottom="t('instrumentsManageTitle')"
+          @click="openInstruments"
+        />
+        <Button
           v-if="stems"
-          type="button"
-          class="icon-button"
-          :title="t('stemServiceManageTitle')"
+          icon="pi pi-wave-pulse"
+          severity="secondary"
+          text
+          rounded
           :aria-label="t('stemServiceManage')"
+          v-tooltip.bottom="t('stemServiceManageTitle')"
           @click="openStemService"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M2 12h2l2-6 3 12 3-14 3 16 3-10 2 2h2" />
-          </svg>
-        </button>
-        <button
+        />
+        <Button
           v-if="voice"
-          type="button"
-          class="icon-button"
-          :title="t('voicesManageTitle')"
+          icon="pi pi-microphone"
+          severity="secondary"
+          text
+          rounded
           :aria-label="t('voicesManage')"
+          v-tooltip.bottom="t('voicesManageTitle')"
           @click="openVoices"
-        >
-          <!-- A microphone: the collection of voices. -->
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="9" y="3" width="6" height="11" rx="3" />
-            <path d="M5 11a7 7 0 0 0 14 0" />
-            <line x1="12" y1="18" x2="12" y2="21" />
-          </svg>
-        </button>
-        <button
+        />
+        <Button
           v-if="voice"
-          type="button"
-          class="icon-button"
-          :title="t('voiceJobsManageTitle')"
+          icon="pi pi-list"
+          severity="secondary"
+          text
+          rounded
           :aria-label="t('voiceJobsManage')"
+          v-tooltip.bottom="t('voiceJobsManageTitle')"
           @click="openVoiceJobs"
-        >
-          <!-- A microphone in a list: the jobs of the voice service. -->
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <line x1="4" y1="7" x2="13" y2="7" />
-            <line x1="4" y1="12" x2="11" y2="12" />
-            <line x1="4" y1="17" x2="13" y2="17" />
-            <circle cx="18" cy="12" r="3" />
-            <line x1="18" y1="15" x2="18" y2="19" />
-          </svg>
-        </button>
+        />
       </div>
-      <button type="button" class="button secondary small" :title="t('resetTitle')" @click="reset">{{ t('reset') }}</button>
-      <div class="locale" role="group" aria-label="Language">
-      <button type="button" :aria-pressed="locale === 'de'" @click="setLocale('de')">DE</button>
-      <button type="button" :aria-pressed="locale === 'en'" @click="setLocale('en')">EN</button>
-      </div>
+      <Button
+        :label="t('reset')"
+        icon="pi pi-undo"
+        severity="secondary"
+        outlined
+        size="small"
+        v-tooltip.bottom="t('resetTitle')"
+        @click="reset"
+      />
+      <SelectButton
+        :model-value="locale"
+        :options="[...locales]"
+        option-label="label"
+        option-value="value"
+        :allow-empty="false"
+        size="small"
+        aria-label="Language"
+        @update:model-value="setLocale"
+      />
     </div>
   </header>
 
-  <main>
-    <p v-if="instrumentsError" class="hint danger" role="alert">{{ instrumentsError }}</p>
+  <!-- minmax(0, 1fr): a wide table inside a card scrolls on its own instead of widening the page. -->
+  <main class="grid grid-cols-[minmax(0,1fr)] gap-4">
+    <Message v-if="instrumentsError" severity="error" role="alert">{{ instrumentsError }}</Message>
 
-    <div class="files">
-      <section class="card">
-        <h2>{{ t('scoreTitle') }}</h2>
-        <FileDropZone
-          :file="file"
-          extension=".abc"
-          accept=".abc,text/plain,text/vnd.abc"
-          :drop-hint="t('dropHint')"
-          :wrong-type-hint="t('notAbc')"
-          folders
-          @select="selectFile"
-          @songs="selectSongs"
-          @clear="file = null"
-        />
-        <p class="hint muted">{{ t('folderHint') }}</p>
-        <p v-if="folderNote" class="hint">{{ folderNote }}</p>
-      </section>
+    <!-- Score and audio side by side; on a phone each one takes the whole row. -->
+    <div class="grid gap-4 grid-cols-1 md:grid-cols-2 items-stretch">
+      <Card class="file-card" :pt="fillCard">
+        <template #title>{{ t('scoreTitle') }}</template>
+        <template #content>
+          <FileDropZone
+            :file="file"
+            extension=".abc"
+            accept=".abc,text/plain,text/vnd.abc"
+            :drop-hint="t('dropHint')"
+            :wrong-type-hint="t('notAbc')"
+            folders
+            @select="selectFile"
+            @songs="selectSongs"
+            @clear="file = null"
+          />
+          <p class="hint muted">{{ t('folderHint') }}</p>
+          <p v-if="folderNote" class="hint">{{ folderNote }}</p>
+        </template>
+      </Card>
 
-      <section class="card">
-        <h2>{{ t('audioTitle') }}</h2>
-        <p class="muted intro">{{ t('audioInfo') }}</p>
-        <FileDropZone
-          :file="audio"
-          extension=".flac"
-          accept=".flac,audio/flac,audio/x-flac"
-          :drop-hint="t('audioDropHint')"
-          :wrong-type-hint="t('notFlac')"
-          @select="selectAudio"
-          @clear="selectAudio(null)"
-        />
-        <StemPanel
-          v-if="stems"
-          ref="stemPanel"
-          v-model:job="stemJob"
-          v-model:running="stemsRunning"
-          v-model:tracked="stemTracked"
-          :audio="audio"
-          :output-name="outputName"
-          @export-logic="exportLogic"
-        />
-        <VoicePanel
-          v-if="voice"
-          ref="voicePanel"
-          v-model:job="voiceJob"
-          v-model:running="voiceRunning"
-          v-model:tracked="voiceTracked"
-          :voices="voices"
-          :stem-job="stemJob"
-          :stems="stems"
-          :audio="audio"
-          :can-export="file !== null"
-          :output-name="outputName"
-          @export-logic="exportLogic"
-        />
-      </section>
+      <Card class="file-card" :pt="fillCard">
+        <template #title>{{ t('audioTitle') }}</template>
+        <template #subtitle>{{ t('audioInfo') }}</template>
+        <template #content>
+          <FileDropZone
+            :file="audio"
+            extension=".flac"
+            accept=".flac,audio/flac,audio/x-flac"
+            :drop-hint="t('audioDropHint')"
+            :wrong-type-hint="t('notFlac')"
+            @select="selectAudio"
+            @clear="selectAudio(null)"
+          />
+          <StemPanel
+            v-if="stems"
+            ref="stemPanel"
+            v-model:job="stemJob"
+            v-model:running="stemsRunning"
+            v-model:tracked="stemTracked"
+            :audio="audio"
+            :output-name="outputName"
+            @export-logic="exportLogic"
+          />
+          <VoicePanel
+            v-if="voice"
+            ref="voicePanel"
+            v-model:job="voiceJob"
+            v-model:running="voiceRunning"
+            v-model:tracked="voiceTracked"
+            :voices="voices"
+            :stem-job="stemJob"
+            :stems="stems"
+            :audio="audio"
+            :can-export="file !== null"
+            :output-name="outputName"
+            @export-logic="exportLogic"
+          />
+        </template>
+      </Card>
     </div>
 
-    <section class="card">
-      <div class="options-head">
-        <h2>{{ t('optionsTitle') }}</h2>
-        <div class="presets">
-          <label>
-            <span class="sr-only">{{ t('presets') }}</span>
-            <select v-model="presetName" @change="applyPreset">
-              <option value="">{{ t('presetNone') }}</option>
-              <option v-for="preset in presets" :key="preset.name" :value="preset.name">{{ preset.name }}</option>
-            </select>
-          </label>
-          <input v-model.trim="newPresetName" type="text" :placeholder="t('presetName')" spellcheck="false" />
-          <button type="button" class="button secondary small" :disabled="!newPresetName || presetsBusy" @click="storePreset">
-            {{ t('presetSave') }}
-          </button>
-          <button type="button" class="button secondary small" :disabled="!presetName || presetsBusy" @click="removePreset">
-            {{ t('presetDelete') }}
-          </button>
+    <Card>
+      <template #title>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span>{{ t('optionsTitle') }}</span>
+          <div class="flex flex-wrap items-center gap-2 text-base font-normal">
+            <Select
+              :model-value="presetName || null"
+              :options="presets"
+              option-label="name"
+              option-value="name"
+              :placeholder="t('presetNone')"
+              :aria-label="t('presets')"
+              show-clear
+              size="small"
+              class="w-40"
+              @update:model-value="applyPreset"
+            />
+            <InputText
+              v-model.trim="newPresetName"
+              :placeholder="t('presetName')"
+              :aria-label="t('presetName')"
+              spellcheck="false"
+              size="small"
+              class="w-32"
+            />
+            <Button
+              :label="t('presetSave')"
+              severity="secondary"
+              outlined
+              size="small"
+              :disabled="!newPresetName || presetsBusy"
+              @click="storePreset"
+            />
+            <Button
+              :label="t('presetDelete')"
+              severity="secondary"
+              outlined
+              size="small"
+              :disabled="!presetName || presetsBusy"
+              @click="removePreset"
+            />
+          </div>
         </div>
-      </div>
-      <p v-if="presetsError" class="hint danger presets-error" role="alert">{{ presetsError }}</p>
-      <OptionsForm v-model="form" />
+      </template>
+      <template #content>
+        <p v-if="presetsError" class="hint danger mt-0 mb-3" role="alert">{{ presetsError }}</p>
+        <OptionsForm v-model="form" />
 
-      <form class="submit" @submit.prevent="convert">
-        <label>
-          {{ t('outputName') }}
-          <span class="name-field">
-            <input v-model.trim="outputName" type="text" required spellcheck="false" />
-            <span class="muted">.mid</span>
-          </span>
-        </label>
-        <button type="submit" class="button primary" :disabled="!file || busy || !outputName">
-          {{ busy ? t('converting') : t('convert') }}
-        </button>
-      </form>
-      <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
-    </section>
+        <form class="submit" @submit.prevent="convert">
+          <label class="grid gap-1 flex-[1_1_14rem] text-sm text-muted-color">
+            {{ t('outputName') }}
+            <InputGroup>
+              <InputText v-model.trim="outputName" required spellcheck="false" />
+              <InputGroupAddon>.mid</InputGroupAddon>
+            </InputGroup>
+          </label>
+          <Button
+            type="submit"
+            :label="busy ? t('converting') : t('convert')"
+            icon="pi pi-cog"
+            :loading="busy"
+            :disabled="!file || busy || !outputName"
+          />
+        </form>
+        <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
+      </template>
+    </Card>
 
     <ScorePreview
       v-if="result?.score"
@@ -584,145 +641,21 @@ async function convert(): Promise<void> {
 .page-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
 }
 
 h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.6rem;
   letter-spacing: -0.02em;
 }
 
-.page-header p {
-  margin: 0.25rem 0 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.button.small {
-  padding: 0.3rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.tools {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-small);
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
-}
-
-.icon-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.icon-button svg {
-  width: 1.15rem;
-  height: 1.15rem;
-  fill: none;
-  stroke: currentcolor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.locale {
-  display: flex;
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-small);
-}
-
-.locale button {
-  padding: 0.3rem 0.65rem;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.locale button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-main {
-  display: grid;
-  gap: 1rem;
-}
-
-.options-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
-.options-head h2 {
-  margin-bottom: 0;
-}
-
-.presets {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.presets input {
-  width: 7rem;
-}
-
-.presets-error {
-  margin: 0 0 0.75rem;
-}
-
-/* Score and audio side by side; below a certain width each one takes the whole row. */
-.files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.files > .card {
-  display: flex;
-  flex: 1 1 18rem;
-  flex-direction: column;
-}
-
-/* The drop zone is a child component, so its own root element needs a deep selector. */
-.files .card :deep(.drop-zone) {
+/* The drop zone fills the card, so both cards of a row end on the same line. */
+.file-card :deep(.drop-zone) {
   flex: 1;
-}
-
-.intro {
-  margin: -0.5rem 0 1rem;
-  font-size: 0.9rem;
 }
 
 .submit {
@@ -734,24 +667,5 @@ main {
   margin-top: 1.5rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
-}
-
-.submit label {
-  display: grid;
-  flex: 1 1 14rem;
-  gap: 0.25rem;
-  color: var(--text-muted);
-  font-size: 0.875rem;
-}
-
-.name-field {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.name-field input {
-  flex: 1;
-  min-width: 0;
 }
 </style>

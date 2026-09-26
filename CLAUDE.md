@@ -24,7 +24,7 @@ dotnet publish src/YueToLogic.Api -c Release -o publish   # runs npm ci + npm ru
 docker build -t yue-to-logic .
 ```
 
-Frontend only, from `src/YueToLogic.Api/ClientApp`: `npm run dev`, `npm run build` (vue-tsc type check, then Vite), `npm run type-check`. There is no linter or JS test runner.
+Frontend only, from `src/YueToLogic.Api/ClientApp`: `npm run dev`, `npm run build` (vue-tsc type check, then Vite), `npm run type-check`, `npm run format` (Prettier, config in `.prettierrc.json`). There is no linter or JS test runner.
 
 CI (`.github/workflows/ci.yml`) builds with `-warnaserror`, runs the tests, converts `samples/score.abc` with the CLI and checks the JSON dump with `jq`, then publishes with the frontend and builds the image. A warning that passes locally still fails CI.
 
@@ -78,7 +78,9 @@ Warnings of a Logic export travel in the `X-YueToLogic-Diagnostics` header (comp
 
 ### Frontend (`src/YueToLogic.Api/ClientApp`)
 
-Vue 3 + TypeScript + Vite, no router, no state library, no component framework. `App.vue` holds the state; `api.ts` is the only place that talks to `/api`; `options.ts` maps the form to `ConversionOptions` (percent sliders map to the same maxima as the CLI flags); `i18n.ts` holds every German and English string; `player.ts` schedules preview playback to Web MIDI ports or a Web Audio fallback; `pianoRoll.ts` draws only the visible slice on a canvas. Web MIDI exists only in Chromium (`midiUsable()`), which gates reading the machine's outputs and playing through them - not the instrument library: that is server state and is edited everywhere, with the ports of the stored instruments as the choice where none can be looked up (a browser with neither cannot add the first one). Form state lives in `localStorage`; presets and instruments live on the server (`presets.ts` moves a browser's old local presets over once).
+Vue 3 + TypeScript + Vite, no router, no state library. `App.vue` holds the state; `api.ts` is the only place that talks to `/api`; `options.ts` maps the form to `ConversionOptions` (percent sliders map to the same maxima as the CLI flags); `i18n.ts` holds every German and English string; `player.ts` schedules preview playback to Web MIDI ports or a Web Audio fallback; `pianoRoll.ts` draws only the visible slice on a canvas. Web MIDI exists only in Chromium (`midiUsable()`), which gates reading the machine's outputs and playing through them - not the instrument library: that is server state and is edited everywhere, with the ports of the stored instruments as the choice where none can be looked up (a browser with neither cannot add the first one). Form state lives in `localStorage`; presets and instruments live on the server (`presets.ts` moves a browser's old local presets over once).
+
+The look follows YuE UI. UI components come from PrimeVue 4 (styled mode, Aura preset from `@primeuix/themes`), registered globally in `main.ts`; the dialogs are PrimeVue `Dialog`s opened through each component's exposed `open()`. Use a PrimeVue component instead of styling native elements, and adjust the look through props, `pt` or utilities rather than by overriding `.p-*` classes. Tailwind CSS 4 (via `@tailwindcss/vite`, without preflight) with `tailwindcss-primeui` does the layout. Cascade layers decide what wins, declared at the top of `style.css`: `theme, base, primevue, components, utilities`; an unlayered rule, including every `<style scoped>` block, beats all of them. `style.css` maps the app's own variables (`--accent`, `--text`, `--border`, ...) onto Aura's tokens, so scoped styles and the piano roll's canvas (`pianoRoll.ts` reads them) share PrimeVue's palette in both themes.
 
 ## Conventions
 

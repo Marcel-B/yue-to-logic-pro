@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { ApiError, downloadVoiceResult, forgetVoiceJob, startVoiceJob, voiceJobStatus, type VoiceSource } from '../api'
 import { t } from '../i18n'
 import { baseName, download } from '../score'
@@ -72,9 +72,16 @@ const error = ref<string | null>(null)
 /** What happened to the job outside this panel, e.g. that it was removed in the job dialog. */
 const note = ref<string | null>(null)
 const downloading = ref(false)
-const dialog = useTemplateRef<HTMLDialogElement>('dialog')
+/** Whether the dialog that asks what to do with a finished conversion is open. */
+const ready = ref(false)
 let jobId: string | null = null
 let timer: number | undefined
+
+/** The two sources as SelectButton options; a pair of radio buttons before, the same choice. */
+const sources = computed(() => [
+  { label: t('voiceSourceStems'), value: 'stems' },
+  { label: t('voiceSourceFile'), value: 'file' },
+])
 
 const statusText = computed(() => {
   switch (status.value?.toUpperCase()) {
@@ -222,7 +229,7 @@ function poll(): void {
           job.value = jobId
           jobId = null
           busy.value = false
-          dialog.value?.showModal()
+          ready.value = true
           break
         case 'FAILED':
           error.value = state.errorMessage ?? t('voiceFailed')
@@ -256,7 +263,10 @@ async function saveWav(): Promise<void> {
     return
   }
 
-  const name = source.value === 'file' && ownVocals.value ? `${baseName(ownVocals.value.name)}-voice` : `${props.outputName || 'score'}-vocals`
+  const name =
+    source.value === 'file' && ownVocals.value
+      ? `${baseName(ownVocals.value.name)}-voice`
+      : `${props.outputName || 'score'}-vocals`
   downloading.value = true
   try {
     download(await downloadVoiceResult(job.value), `${name}.wav`)
@@ -281,7 +291,7 @@ function discard(): void {
 }
 
 function close(): void {
-  dialog.value?.close()
+  ready.value = false
 }
 
 function fail(caught: unknown): void {
@@ -307,22 +317,23 @@ defineExpose({ forget, notTaken, clear })
 </script>
 
 <template>
-  <div class="voice">
-    <h3>{{ t('voiceTitle') }}</h3>
-    <p class="muted intro">{{ t('voiceInfo') }}</p>
+  <div class="mt-5 border-t border-surface pt-5">
+    <h3 class="mt-0 mb-1 text-base font-semibold">{{ t('voiceTitle') }}</h3>
+    <p class="muted mt-0 mb-3 text-sm">{{ t('voiceInfo') }}</p>
 
-    <div v-if="stems" class="sources" role="radiogroup" :aria-label="t('voiceSource')">
-      <label>
-        <input v-model="source" type="radio" value="stems" :disabled="busy" />
-        {{ t('voiceSourceStems') }}
-      </label>
-      <label>
-        <input v-model="source" type="radio" value="file" :disabled="busy" />
-        {{ t('voiceSourceFile') }}
-      </label>
-    </div>
+    <SelectButton
+      v-if="stems"
+      v-model="source"
+      class="mb-3"
+      :options="sources"
+      option-label="label"
+      option-value="value"
+      :allow-empty="false"
+      :disabled="busy"
+      :aria-label="t('voiceSource')"
+    />
 
-    <div v-if="source === 'file'" class="own">
+    <div v-if="source === 'file'" class="mb-3">
       <FileDropZone
         :file="ownVocals"
         extension=".wav"
@@ -334,24 +345,42 @@ defineExpose({ forget, notTaken, clear })
       />
     </div>
 
-    <label v-if="voices.length > 0" class="field">
-      <span>{{ t('voiceChoose') }}</span>
-      <select v-model="voice" :disabled="busy">
-        <option v-for="option in voices" :key="option.id" :value="option.id">{{ option.label }}</option>
-      </select>
-    </label>
-
-    <div class="row">
-      <button type="button" class="button secondary small" :disabled="!vocals || !voice || busy" @click="start">
-        {{ busy ? t('voiceRunning') : t('voiceStart') }}
-      </button>
+    <div v-if="voices.length > 0" class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+      <label for="voice-choice">{{ t('voiceChoose') }}</label>
+      <Select
+        v-model="voice"
+        input-id="voice-choice"
+        class="w-full max-w-full sm:w-56"
+        :options="voices"
+        option-label="label"
+        option-value="id"
+        :disabled="busy"
+      />
     </div>
 
-    <div v-if="job" class="row ready">
-      <button type="button" class="button secondary small" :disabled="downloading" @click="saveWav">
-        {{ downloading ? t('voiceDownloading') : t('voiceDownload') }}
-      </button>
-      <button type="button" class="button secondary small" @click="discard">{{ t('voiceDiscard') }}</button>
+    <div class="flex flex-wrap items-center gap-3">
+      <Button
+        size="small"
+        severity="secondary"
+        outlined
+        :label="busy ? t('voiceRunning') : t('voiceStart')"
+        :loading="busy"
+        :disabled="!vocals || !voice || busy"
+        @click="start"
+      />
+    </div>
+
+    <div v-if="job" class="mt-2 flex flex-wrap items-center gap-3">
+      <Button
+        size="small"
+        severity="secondary"
+        outlined
+        :label="downloading ? t('voiceDownloading') : t('voiceDownload')"
+        :loading="downloading"
+        :disabled="downloading"
+        @click="saveWav"
+      />
+      <Button size="small" severity="secondary" outlined :label="t('voiceDiscard')" @click="discard" />
     </div>
 
     <p v-if="voices.length === 0" class="hint muted">{{ t('voiceNoVoices') }}</p>
@@ -363,105 +392,27 @@ defineExpose({ forget, notTaken, clear })
     <p v-else-if="job" class="hint">{{ canExport ? t('voiceWaiting') : t('voiceWaitingNoProject') }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
 
-    <dialog ref="dialog" class="voice-dialog" @cancel.prevent="close">
-      <h3>{{ t('voiceReadyTitle') }}</h3>
-      <p>{{ canExport ? t('voiceReadyInfo') : t('voiceReadyInfoNoProject') }}</p>
-      <div class="choices">
-        <button v-if="canExport" type="button" class="button primary" @click="intoProject">{{ t('voiceIntoProject') }}</button>
-        <button
-          v-else
-          type="button"
-          class="button primary"
-          :disabled="downloading"
-          @click="saveWav().then(close)"
-        >
-          {{ downloading ? t('voiceDownloading') : t('voiceDownload') }}
-        </button>
-        <button type="button" class="button secondary" @click="close">{{ t('voiceLater') }}</button>
-        <button type="button" class="button secondary" @click="discard">{{ t('voiceDiscard') }}</button>
-      </div>
-    </dialog>
+    <Dialog
+      v-model:visible="ready"
+      modal
+      :header="t('voiceReadyTitle')"
+      :style="{ width: 'min(26rem, calc(100vw - 2rem))' }"
+    >
+      <p class="muted m-0 text-sm">{{ canExport ? t('voiceReadyInfo') : t('voiceReadyInfoNoProject') }}</p>
+      <template #footer>
+        <div class="flex flex-wrap justify-end gap-2">
+          <Button v-if="canExport" :label="t('voiceIntoProject')" @click="intoProject" />
+          <Button
+            v-else
+            :label="downloading ? t('voiceDownloading') : t('voiceDownload')"
+            :loading="downloading"
+            :disabled="downloading"
+            @click="saveWav().then(close)"
+          />
+          <Button severity="secondary" outlined :label="t('voiceLater')" @click="close" />
+          <Button severity="secondary" outlined :label="t('voiceDiscard')" @click="discard" />
+        </div>
+      </template>
+    </Dialog>
   </div>
 </template>
-
-<style scoped>
-.voice {
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
-}
-
-h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.sources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.sources label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-}
-
-.own {
-  margin-bottom: 0.75rem;
-}
-
-.row.ready {
-  margin-top: 0.5rem;
-}
-
-.field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.field select {
-  min-width: 14rem;
-  max-width: 100%;
-}
-
-.voice-dialog {
-  max-width: 26rem;
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.voice-dialog::backdrop {
-  background: rgb(0 0 0 / 50%);
-}
-
-.voice-dialog p {
-  margin: 0 0 1rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-</style>
