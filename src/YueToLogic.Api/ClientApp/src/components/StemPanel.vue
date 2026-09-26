@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ApiError, confirmStems, downloadStems, listStemModels, startStemJob, stemJobStatus } from '../api'
 import { locale, t } from '../i18n'
 import { download } from '../score'
@@ -52,7 +52,8 @@ const note = ref<string | null>(null)
 /** Whether a separation is running, which the result view says next to its Logic button. */
 const busy = defineModel<boolean>('running', { required: true })
 const downloading = ref(false)
-const dialog = useTemplateRef<HTMLDialogElement>('dialog')
+/** Whether the "stems ready" dialog is shown. */
+const ready = ref(false)
 let jobId: string | null = null
 let timer: number | undefined
 
@@ -81,6 +82,17 @@ const grouped = computed(() => {
   }
   return groups
 })
+
+/** The groups as the Select takes them, with the default model's name marked. */
+const modelOptions = computed(() =>
+  grouped.value.map((group) => ({
+    label: group.label,
+    items: group.models.map((option) => ({
+      value: option.id,
+      label: option.isDefault ? t('stemsModelDefault', { name: option.name }) : option.name,
+    })),
+  })),
+)
 
 /** What the chosen model does, in one line: which stems it returns, how long it computes, what it is known for. */
 const modelText = computed(() => {
@@ -216,7 +228,7 @@ function poll(): void {
         job.value = jobId
         jobId = null
         busy.value = false
-        dialog.value?.showModal()
+        ready.value = true
       } else if (state.status === 'failed') {
         error.value = state.lastError ?? t('stemsFailed')
         busy.value = false
@@ -263,7 +275,7 @@ function discard(): void {
 }
 
 function close(): void {
-  dialog.value?.close()
+  ready.value = false
 }
 
 function taskText(task: string): string {
@@ -323,38 +335,54 @@ defineExpose({ forget })
 </script>
 
 <template>
-  <div class="stems">
-    <h3>{{ t('stemsTitle') }}</h3>
-    <p class="muted intro">{{ t('stemsInfo') }}</p>
+  <div class="mt-6 border-t border-surface pt-5">
+    <h3 class="m-0 mb-1 text-base">{{ t('stemsTitle') }}</h3>
+    <p class="muted mt-0">{{ t('stemsInfo') }}</p>
 
-    <label v-if="models.length > 0" class="field">
-      <span>{{ t('stemsModel') }}</span>
-      <select v-model="model" :disabled="busy">
-        <optgroup v-for="group in grouped" :key="group.task" :label="group.label">
-          <option v-for="option in group.models" :key="option.id" :value="option.id">
-            {{ option.isDefault ? t('stemsModelDefault', { name: option.name }) : option.name }}
-          </option>
-        </optgroup>
-      </select>
-    </label>
-    <p v-if="modelText" class="hint muted model-info">{{ modelText }}</p>
+    <div v-if="models.length > 0" class="mb-2 flex flex-wrap items-center gap-2 text-sm">
+      <label for="stem-model">{{ t('stemsModel') }}</label>
+      <Select
+        v-model="model"
+        input-id="stem-model"
+        :options="modelOptions"
+        option-label="label"
+        option-value="value"
+        option-group-label="label"
+        option-group-children="items"
+        :disabled="busy"
+        size="small"
+        class="max-w-full min-w-56"
+      />
+    </div>
+    <p v-if="modelText" class="hint muted mt-0 mb-3">{{ modelText }}</p>
     <p v-if="!hasVocals" class="hint muted">{{ t('stemsModelNoVocals') }}</p>
 
-    <div class="row">
-      <button type="button" class="button secondary small" :disabled="!audio || busy" @click="start">
-        {{ busy ? t('stemsRunning') : t('stemsStart') }}
-      </button>
-      <label class="check" :class="{ disabled: busy || !hasVocals }">
-        <input v-model="dereverb" type="checkbox" :disabled="busy || !hasVocals" />
+    <div class="flex flex-wrap items-center gap-3">
+      <Button
+        :label="busy ? t('stemsRunning') : t('stemsStart')"
+        :loading="busy"
+        :disabled="!audio || busy"
+        severity="secondary"
+        outlined
+        size="small"
+        @click="start"
+      />
+      <label class="check text-sm" :class="{ disabled: busy || !hasVocals }">
+        <Checkbox v-model="dereverb" binary :disabled="busy || !hasVocals" />
         {{ t('stemsDereverb') }}
       </label>
     </div>
 
-    <div v-if="job" class="row ready">
-      <button type="button" class="button secondary small" :disabled="downloading" @click="saveZip">
-        {{ downloading ? t('stemsDownloading') : t('stemsDownload') }}
-      </button>
-      <button type="button" class="button secondary small" @click="discard">{{ t('stemsDiscard') }}</button>
+    <div v-if="job" class="mt-2 flex flex-wrap items-center gap-3">
+      <Button
+        :label="downloading ? t('stemsDownloading') : t('stemsDownload')"
+        :loading="downloading"
+        severity="secondary"
+        outlined
+        size="small"
+        @click="saveZip"
+      />
+      <Button :label="t('stemsDiscard')" severity="secondary" outlined size="small" @click="discard" />
     </div>
 
     <p v-if="!audio" class="hint muted">{{ t('stemsNeedsAudio') }}</p>
@@ -363,92 +391,22 @@ defineExpose({ forget })
     <p v-else-if="note" class="hint muted">{{ note }}</p>
     <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
 
-    <dialog ref="dialog" class="stem-dialog" @cancel.prevent="close">
-      <h3>{{ t('stemsReadyTitle') }}</h3>
-      <p>{{ t('stemsReadyInfo') }}</p>
-      <div class="choices">
-        <button type="button" class="button primary" @click="intoProject">{{ t('stemsIntoProject') }}</button>
-        <button type="button" class="button secondary" @click="close">{{ t('stemsLater') }}</button>
-        <button type="button" class="button secondary" @click="discard">{{ t('stemsDiscard') }}</button>
-      </div>
-    </dialog>
+    <!-- Closing it any other way than the buttons means "later": the stems stay at the service. -->
+    <Dialog
+      v-model:visible="ready"
+      modal
+      :header="t('stemsReadyTitle')"
+      :draggable="false"
+      :style="{ width: 'min(26rem, calc(100vw - 2rem))' }"
+    >
+      <p class="muted m-0 text-sm">{{ t('stemsReadyInfo') }}</p>
+      <template #footer>
+        <div class="flex flex-wrap justify-end gap-2">
+          <Button :label="t('stemsDiscard')" severity="secondary" text @click="discard" />
+          <Button :label="t('stemsLater')" severity="secondary" outlined @click="close" />
+          <Button :label="t('stemsIntoProject')" @click="intoProject" />
+        </div>
+      </template>
+    </Dialog>
   </div>
 </template>
-
-<style scoped>
-.stems {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
-}
-
-h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.row.ready {
-  margin-top: 0.5rem;
-}
-
-.field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.field select {
-  min-width: 14rem;
-  max-width: 100%;
-}
-
-.model-info {
-  margin-bottom: 0.75rem;
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.check.disabled {
-  color: var(--text-muted);
-}
-
-.stem-dialog {
-  max-width: 26rem;
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.stem-dialog::backdrop {
-  background: rgb(0 0 0 / 50%);
-}
-
-.stem-dialog p {
-  margin: 0 0 1rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-</style>

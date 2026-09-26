@@ -1,171 +1,128 @@
-:root {
-  --bg: #f6f7fb;
-  --surface: #ffffff;
-  --surface-sunken: #f1f3f8;
-  --text: #16181d;
-  --text-muted: #5d6474;
-  --border: #e3e6ee;
-  --border-strong: #c9cedb;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: #e8e7fd;
-  --on-accent: #ffffff;
-  --danger: #d92d20;
-  --warning: #f79009;
-  --warning-text: #b54708;
-  --radius: 12px;
-  --radius-small: 8px;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+/* PrimeVue (cssLayer "primevue" in main.ts) sits between Tailwind's base and utilities, so utility classes override
+   PrimeVue's styles. Rules outside a layer beat every layer, which is why this file puts its own rules into base and
+   components; <style scoped> blocks are unlayered and still win over utilities. */
+@layer theme, base, primevue, components, utilities;
+/* Without Tailwind's preflight: it would reset margins, lists and native controls the components rely on. */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tailwindcss-primeui';
+@import 'primeicons/primeicons.css';
 
-  color-scheme: light;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.5;
-  color: var(--text);
-  background: var(--bg);
-  -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
+  /* The page's own colours follow the Aura preset, so the scoped styles, the piano roll's canvas and PrimeVue's
+     components share one palette and one accent in both themes. Only the backgrounds are set here, as in YuE UI. */
   :root {
-    --bg: #0f1115;
-    --surface: #171a21;
-    --surface-sunken: #1e222b;
-    --text: #e8eaf0;
-    --text-muted: #9aa1b2;
-    --border: #282d38;
-    --border-strong: #3a404e;
-    --accent: #7c74ff;
-    --accent-hover: #948dff;
-    --accent-soft: #2a2752;
-    --on-accent: #0f1115;
-    --danger: #f97066;
-    --warning: #fdb022;
-    --warning-text: #fdb022;
+    --bg: #f6f7fb;
+    --surface: var(--p-content-background);
+    --surface-sunken: #f1f3f8;
+    --text: var(--p-text-color);
+    --text-muted: var(--p-text-muted-color);
+    --border: var(--p-content-border-color);
+    --border-strong: var(--p-form-field-border-color);
+    --accent: var(--p-primary-color);
+    --accent-hover: var(--p-primary-hover-color);
+    --accent-soft: var(--p-highlight-background);
+    --on-accent: var(--p-primary-contrast-color);
+    --danger: var(--p-red-600);
+    --warning: var(--p-amber-500);
+    --warning-text: var(--p-amber-700);
+    --radius: var(--p-content-border-radius);
+    --radius-small: var(--p-form-field-border-radius);
+    --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-    color-scheme: dark;
+    color-scheme: light;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --surface-sunken: #1e222b;
+      --danger: var(--p-red-400);
+      --warning: var(--p-amber-400);
+      --warning-text: var(--p-amber-400);
+
+      color-scheme: dark;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    max-width: 72rem;
+    margin: 0 auto;
+    /* The notch and home indicator of a phone in landscape. */
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+      max(3rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  h2 {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+  }
+
+  /* 16px keeps iOS Safari from zooming into a field on focus, as PrimeVue's own fields already have it. */
+  input,
+  select,
+  textarea {
+    font-size: max(1rem, 16px);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 }
 
-* {
-  box-sizing: border-box;
-}
+@layer components {
+  .muted {
+    color: var(--text-muted);
+  }
 
-body {
-  margin: 0;
-  background: var(--bg);
-}
+  .hint {
+    margin: 0.75rem 0 0;
+    font-size: 0.9rem;
+  }
 
-#app {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 2rem 1rem 3rem;
-}
+  .hint.warning {
+    color: var(--warning-text);
+  }
 
-h2 {
-  margin: 0 0 1rem;
-  font-size: 1.1rem;
-}
+  .hint.danger {
+    color: var(--danger);
+  }
 
-.card {
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
+  /* A checkbox and its text, clickable as one. */
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
 
-.muted {
-  color: var(--text-muted);
-}
+  .check.disabled {
+    color: var(--text-muted);
+    cursor: default;
+  }
 
-.hint {
-  margin: 0.75rem 0 0;
-  font-size: 0.9rem;
-}
-
-.hint.warning {
-  color: var(--warning-text);
-}
-
-.hint.danger {
-  color: var(--danger);
-}
-
-input[type='text'],
-input[type='number'],
-select {
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-small);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-}
-
-select:disabled {
-  opacity: 0.5;
-}
-
-input[type='checkbox'] {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--accent);
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.55rem 1.1rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-small);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.button.primary {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.button.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-.button.secondary {
-  border-color: var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, ref } from 'vue'
 import { ApiError, createInstrument, deleteInstrument, listInstruments, updateInstrument } from '../api'
 import { t, type MessageKey } from '../i18n'
 import { noteName, parseNote } from '../notes'
@@ -26,7 +26,7 @@ const OTHER_PORT = '\u0000other'
  */
 const canReadPorts = midiUsable()
 
-const dialog = useTemplateRef<HTMLDialogElement>('dialog')
+const visible = ref(false)
 const ports = ref<MidiPort[]>([])
 const canAskForMidi = ref(false)
 /** The id being edited, or null while adding. */
@@ -42,6 +42,10 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 
 const channels = Array.from({ length: 16 }, (_, index) => index + 1)
+const kinds = computed(() => [
+  { label: t('instrumentKindSynth'), value: 'Synth' },
+  { label: t('instrumentKindDrumMachine'), value: 'DrumMachine' },
+])
 
 /**
  * The outputs to choose from: what the browser offers, then what the stored instruments name. The second half
@@ -49,19 +53,33 @@ const channels = Array.from({ length: 16 }, (_, index) => index + 1)
  * and it also helps in Chromium, where an interface that is unplugged right now is otherwise gone from the list.
  */
 const portNames = computed(() => [
-  ...new Set([...ports.value.map((entry) => entry.name.trim()), ...props.instruments.map((entry) => entry.port.trim())]),
+  ...new Set([
+    ...ports.value.map((entry) => entry.name.trim()),
+    ...props.instruments.map((entry) => entry.port.trim()),
+  ]),
 ])
 
 /** A port may be typed where the browser can read them; elsewhere only a stored name can be picked. */
 const canTypePort = canReadPorts
+/** The port select's entries: the known names, then "other" where a port may be typed by hand. */
+const portOptions = computed(() => [
+  ...portNames.value.map((entry) => ({ label: entry, value: entry })),
+  ...(canTypePort ? [{ label: t('instrumentPortOther'), value: OTHER_PORT }] : []),
+])
 /** Without a single known output there is nothing to point an instrument at, so nothing can be added here. */
 const canAdd = computed(() => canTypePort || portNames.value.length > 0)
 const chosenPort = computed(() => (port.value === OTHER_PORT ? otherPort.value : port.value).trim())
 /** The drum notes as numbers, or null where a field holds nothing a note can be read from. */
 const drumNotes = computed<Record<keyof DrumNotes, number | null>>(
-  () => Object.fromEntries(DRUMS.map((drum) => [drum, parseNote(drumText.value[drum])])) as Record<keyof DrumNotes, number | null>,
+  () =>
+    Object.fromEntries(DRUMS.map((drum) => [drum, parseNote(drumText.value[drum])])) as Record<
+      keyof DrumNotes,
+      number | null
+    >,
 )
-const drumsComplete = computed(() => kind.value !== 'DrumMachine' || DRUMS.every((drum) => drumNotes.value[drum] !== null))
+const drumsComplete = computed(
+  () => kind.value !== 'DrumMachine' || DRUMS.every((drum) => drumNotes.value[drum] !== null),
+)
 const complete = computed(() => name.value.trim().length > 0 && chosenPort.value.length > 0 && drumsComplete.value)
 
 function drumTexts(notes: DrumNotes): Record<keyof DrumNotes, string> {
@@ -82,7 +100,7 @@ function drumSummary(notes: DrumNotes): string {
 async function open(): Promise<void> {
   startAdding()
   error.value = null
-  dialog.value?.showModal()
+  visible.value = true
   if (!canReadPorts) {
     return
   }
@@ -94,7 +112,7 @@ async function open(): Promise<void> {
 }
 
 function close(): void {
-  dialog.value?.close()
+  visible.value = false
 }
 
 async function loadPorts(): Promise<void> {
@@ -148,7 +166,9 @@ async function submit(): Promise<void> {
   error.value = null
   const drums =
     kind.value === 'DrumMachine'
-      ? (Object.fromEntries(DRUMS.map((drum) => [drum, drumNotes.value[drum] ?? GENERAL_MIDI_DRUMS[drum]])) as unknown as DrumNotes)
+      ? (Object.fromEntries(
+          DRUMS.map((drum) => [drum, drumNotes.value[drum] ?? GENERAL_MIDI_DRUMS[drum]]),
+        ) as unknown as DrumNotes)
       : null
   const input = { name: name.value.trim(), port: chosenPort.value, channel: channel.value, kind: kind.value, drums }
   try {
@@ -203,229 +223,184 @@ defineExpose({ open })
 </script>
 
 <template>
-  <dialog ref="dialog" class="instrument-dialog" @cancel.prevent="close">
-    <h3>{{ t('instrumentsTitle') }}</h3>
-    <p class="intro">{{ t('instrumentsIntro') }}</p>
+  <Dialog
+    v-model:visible="visible"
+    modal
+    :header="t('instrumentsTitle')"
+    :draggable="false"
+    :style="{ width: 'min(40rem, calc(100vw - 2rem))' }"
+  >
+    <p class="muted mt-0 mb-4 text-sm">{{ t('instrumentsIntro') }}</p>
 
-    <table v-if="props.instruments.length > 0">
-      <thead>
-        <tr>
-          <th>{{ t('instrumentName') }}</th>
-          <th>{{ t('instrumentPort') }}</th>
-          <th>{{ t('instrumentChannel') }}</th>
-          <th>{{ t('instrumentKind') }}</th>
-          <th><span class="sr-only">{{ t('instrumentEdit') }}</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="instrument in props.instruments" :key="instrument.id" :class="{ editing: instrument.id === editing }">
-          <td>{{ instrument.name }}</td>
-          <td>{{ instrument.port }}</td>
-          <td>{{ instrument.channel }}</td>
-          <td>
-            {{ instrument.kind === 'DrumMachine' ? t('instrumentKindDrumMachine') : t('instrumentKindSynth') }}
-            <span v-if="instrument.drums" class="muted drums">{{ drumSummary(instrument.drums) }}</span>
-          </td>
-          <td class="actions">
-            <button type="button" class="link" :disabled="busy" @click="edit(instrument)">{{ t('instrumentEdit') }}</button>
-            <button type="button" class="link" :disabled="busy" @click="remove(instrument)">{{ t('instrumentDelete') }}</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else class="muted empty">{{ t('instrumentsEmpty') }}</p>
+    <div v-if="props.instruments.length > 0" class="mb-4 overflow-x-auto">
+      <table class="w-full border-collapse text-sm">
+        <thead>
+          <tr class="text-left text-muted-color text-xs">
+            <th class="py-1.5 pr-2 font-medium">{{ t('instrumentName') }}</th>
+            <th class="py-1.5 pr-2 font-medium">{{ t('instrumentPort') }}</th>
+            <th class="py-1.5 pr-2 font-medium">{{ t('instrumentChannel') }}</th>
+            <th class="py-1.5 pr-2 font-medium">{{ t('instrumentKind') }}</th>
+            <th class="py-1.5 font-medium">
+              <span class="sr-only">{{ t('instrumentEdit') }}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="instrument in props.instruments"
+            :key="instrument.id"
+            class="rule"
+            :class="{ 'bg-highlight': instrument.id === editing }"
+          >
+            <td class="py-1 pr-2 align-middle">{{ instrument.name }}</td>
+            <td class="py-1 pr-2 align-middle">{{ instrument.port }}</td>
+            <td class="py-1 pr-2 align-middle">{{ instrument.channel }}</td>
+            <td class="py-1 pr-2 align-middle">
+              {{ instrument.kind === 'DrumMachine' ? t('instrumentKindDrumMachine') : t('instrumentKindSynth') }}
+              <span v-if="instrument.drums" class="muted block text-xs">{{ drumSummary(instrument.drums) }}</span>
+            </td>
+            <td class="py-1 align-middle">
+              <div class="flex gap-1 whitespace-nowrap">
+                <Button link size="small" :label="t('instrumentEdit')" :disabled="busy" @click="edit(instrument)" />
+                <Button
+                  link
+                  size="small"
+                  severity="danger"
+                  :label="t('instrumentDelete')"
+                  :disabled="busy"
+                  @click="remove(instrument)"
+                />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p v-else class="muted mt-0 mb-4 text-sm">{{ t('instrumentsEmpty') }}</p>
 
     <p v-if="!canReadPorts" class="hint muted">{{ t('instrumentsChromiumOnly') }}</p>
 
-    <div v-if="!canAdd" class="editor">
-      <p class="hint muted">{{ t('instrumentsNeedPort') }}</p>
-      <div class="choices">
-        <button type="button" class="button secondary" @click="close">{{ t('instrumentClose') }}</button>
+    <div v-if="!canAdd" class="mt-4 flex flex-col gap-3 rule pt-4">
+      <p class="muted m-0 text-sm">{{ t('instrumentsNeedPort') }}</p>
+      <div class="flex flex-wrap gap-2">
+        <Button type="button" severity="secondary" outlined :label="t('instrumentClose')" @click="close" />
       </div>
     </div>
 
-    <form v-else class="editor" @submit.prevent="submit">
-      <h4>{{ editing === null ? t('instrumentAdd') : t('instrumentEditing', { name }) }}</h4>
-      <label>
-        {{ t('instrumentName') }}
-        <input v-model.trim="name" type="text" required maxlength="64" spellcheck="false" placeholder="Mother32" />
-      </label>
-      <label>
-        {{ t('instrumentPort') }}
-        <select v-model="port">
-          <option v-for="entry in portNames" :key="entry" :value="entry">{{ entry }}</option>
-          <option v-if="canTypePort" :value="OTHER_PORT">{{ t('instrumentPortOther') }}</option>
-        </select>
-      </label>
-      <label v-if="port === OTHER_PORT">
-        <span class="sr-only">{{ t('instrumentPort') }}</span>
-        <input v-model.trim="otherPort" type="text" required maxlength="128" spellcheck="false" placeholder="MIDI4x4 Midi Out 1" />
-      </label>
-      <label>
-        {{ t('instrumentChannel') }}
-        <select v-model.number="channel">
-          <option v-for="entry in channels" :key="entry" :value="entry">{{ entry }}</option>
-        </select>
-      </label>
-      <p class="muted hint">{{ canTypePort ? t('instrumentPortHint') : t('instrumentPortStoredOnly') }}</p>
-      <label>
-        {{ t('instrumentKind') }}
-        <select v-model="kind">
-          <option value="Synth">{{ t('instrumentKindSynth') }}</option>
-          <option value="DrumMachine">{{ t('instrumentKindDrumMachine') }}</option>
-        </select>
-      </label>
-      <fieldset v-if="kind === 'DrumMachine'" class="drum-notes">
-        <legend>{{ t('instrumentDrums') }}</legend>
-        <p class="muted hint">{{ t('instrumentDrumsHint') }}</p>
-        <div class="drum-grid">
-          <label v-for="drum in DRUMS" :key="drum">
-            {{ t(`instrumentDrum_${drum}` as MessageKey) }}
-            <span class="note-field">
-              <input v-model.trim="drumText[drum]" type="text" required maxlength="5" spellcheck="false" :placeholder="noteName(GENERAL_MIDI_DRUMS[drum])" />
-              <span class="muted" :class="{ danger: drumNotes[drum] === null }">{{ drumHint(drum) }}</span>
-            </span>
-          </label>
-        </div>
-      </fieldset>
-      <div class="choices">
-        <button v-if="canAskForMidi" type="button" class="button secondary" @click="loadPorts">{{ t('previewFindMidi') }}</button>
-        <button type="submit" class="button primary" :disabled="!complete || busy">
-          {{ editing === null ? t('instrumentAdd') : t('instrumentSave') }}
-        </button>
-        <button v-if="editing !== null" type="button" class="button secondary" @click="startAdding">{{ t('instrumentCancel') }}</button>
-        <button type="button" class="button secondary" @click="close">{{ t('instrumentClose') }}</button>
+    <form v-else class="mt-4 flex flex-col gap-3 rule pt-4" @submit.prevent="submit">
+      <h4 class="m-0 text-base">{{ editing === null ? t('instrumentAdd') : t('instrumentEditing', { name }) }}</h4>
+      <div class="flex flex-col gap-1">
+        <label for="instrument-name" class="text-sm">{{ t('instrumentName') }}</label>
+        <InputText
+          id="instrument-name"
+          v-model.trim="name"
+          required
+          maxlength="64"
+          spellcheck="false"
+          placeholder="Mother32"
+          fluid
+        />
       </div>
-      <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
+      <div class="flex flex-col gap-1">
+        <label id="instrument-port-label" class="text-sm">{{ t('instrumentPort') }}</label>
+        <Select
+          v-model="port"
+          :options="portOptions"
+          option-label="label"
+          option-value="value"
+          aria-labelledby="instrument-port-label"
+          fluid
+        />
+      </div>
+      <InputText
+        v-if="port === OTHER_PORT"
+        v-model.trim="otherPort"
+        :aria-label="t('instrumentPort')"
+        required
+        maxlength="128"
+        spellcheck="false"
+        placeholder="MIDI4x4 Midi Out 1"
+        fluid
+      />
+      <div class="flex flex-col gap-1">
+        <label id="instrument-channel-label" class="text-sm">{{ t('instrumentChannel') }}</label>
+        <Select v-model="channel" :options="channels" aria-labelledby="instrument-channel-label" class="w-28" />
+      </div>
+      <p class="muted m-0 text-sm">{{ canTypePort ? t('instrumentPortHint') : t('instrumentPortStoredOnly') }}</p>
+      <div class="flex flex-col gap-1">
+        <label id="instrument-kind-label" class="text-sm">{{ t('instrumentKind') }}</label>
+        <Select
+          v-model="kind"
+          :options="kinds"
+          option-label="label"
+          option-value="value"
+          aria-labelledby="instrument-kind-label"
+          fluid
+        />
+      </div>
+      <Fieldset v-if="kind === 'DrumMachine'" :legend="t('instrumentDrums')" class="m-0">
+        <p class="muted mt-0 mb-2 text-sm">{{ t('instrumentDrumsHint') }}</p>
+        <div class="drum-grid grid gap-x-3 gap-y-2">
+          <div v-for="drum in DRUMS" :key="drum" class="flex flex-col gap-1">
+            <label :for="`instrument-drum-${drum}`" class="text-sm">{{
+              t(`instrumentDrum_${drum}` as MessageKey)
+            }}</label>
+            <span class="flex items-center gap-2">
+              <InputText
+                :id="`instrument-drum-${drum}`"
+                v-model.trim="drumText[drum]"
+                required
+                maxlength="5"
+                spellcheck="false"
+                :placeholder="noteName(GENERAL_MIDI_DRUMS[drum])"
+                :invalid="drumNotes[drum] === null"
+                class="w-20"
+              />
+              <span class="whitespace-nowrap text-xs" :class="drumNotes[drum] === null ? 'text-(--danger)' : 'muted'">
+                {{ drumHint(drum) }}
+              </span>
+            </span>
+          </div>
+        </div>
+      </Fieldset>
+      <div class="mt-1 flex flex-wrap gap-2">
+        <Button
+          v-if="canAskForMidi"
+          type="button"
+          severity="secondary"
+          outlined
+          :label="t('previewFindMidi')"
+          @click="loadPorts"
+        />
+        <Button
+          type="submit"
+          :label="editing === null ? t('instrumentAdd') : t('instrumentSave')"
+          :disabled="!complete || busy"
+          :loading="busy"
+        />
+        <Button
+          v-if="editing !== null"
+          type="button"
+          severity="secondary"
+          outlined
+          :label="t('instrumentCancel')"
+          @click="startAdding"
+        />
+        <Button type="button" severity="secondary" outlined :label="t('instrumentClose')" @click="close" />
+      </div>
+      <p v-if="error" class="hint danger m-0" role="alert">{{ error }}</p>
     </form>
-  </dialog>
+  </Dialog>
 </template>
 
 <style scoped>
-.instrument-dialog {
-  width: min(36rem, calc(100vw - 2rem));
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.instrument-dialog::backdrop {
-  background: rgb(0 0 0 / 50%);
-}
-
-h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1.1rem;
-}
-
-h4 {
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
-}
-
-.intro {
-  margin: 0 0 1rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-table {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-}
-
-th {
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  text-align: left;
-}
-
-td {
-  padding: 0.3rem 0.5rem 0.3rem 0;
-  border-top: 1px solid var(--border);
-  vertical-align: middle;
-}
-
-tr.editing td {
-  background: var(--accent-soft);
-}
-
-.actions {
-  display: flex;
-  gap: 0.75rem;
-  white-space: nowrap;
-}
-
-.empty {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-}
-
-.editor {
-  display: grid;
-  gap: 0.6rem;
-  padding-top: 1rem;
+/* Tailwind runs without preflight, so a border utility alone would have no style; a plain rule is simpler. */
+.rule {
   border-top: 1px solid var(--border);
 }
 
-.editor label {
-  display: grid;
-  gap: 0.25rem;
-  font-size: 0.9rem;
-}
-
-.editor .hint {
-  margin: 0;
-}
-
-.choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-.drums {
-  display: block;
-  font-size: 0.8rem;
-}
-
-.drum-notes {
-  margin: 0;
-  padding: 0.6rem 0.75rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-}
-
-.drum-notes legend {
-  padding: 0 0.25rem;
-  font-size: 0.9rem;
-}
-
+/* As many drum fields per row as fit, one per row on a narrow phone. */
 .drum-grid {
-  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: 0.5rem 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.note-field {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.note-field input {
-  width: 4.5rem;
-}
-
-.note-field span {
-  font-size: 0.8rem;
-  white-space: nowrap;
 }
 </style>

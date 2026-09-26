@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 
@@ -7,7 +8,23 @@ const apiTarget = process.env.YUE_API_URL ?? 'http://localhost:5080'
 
 export default defineConfig({
   base: '/ui/',
-  plugins: [vue()],
+  plugins: [vue(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vue and PrimeVue (with its Aura preset) make up most of the bundle and change only with a dependency
+        // update. As separate chunks they stay cached across deploys, and no chunk exceeds Vite's 500 kB warning.
+        codeSplitting: {
+          groups: [
+            { name: 'vue', test: /[\\/]node_modules[\\/]@?vue[\\/]/ },
+            { name: 'primevue', test: /[\\/]node_modules[\\/](primevue|@primevue)[\\/]/ },
+            // The Aura preset carries the design tokens and styles of every PrimeVue component, used or not.
+            { name: 'primeuix', test: /[\\/]node_modules[\\/]@primeuix[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,

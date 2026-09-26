@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, useTemplateRef } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { ApiError, deleteVoiceJob, downloadVoiceResult, listVoiceJobs } from '../api'
 import { formatDateTime, locale, t } from '../i18n'
 import { download } from '../score'
@@ -30,7 +30,7 @@ const pageSize = 25
 /** The states the service knows, in the order the filter offers them. */
 const states = ['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'] as const
 
-const dialog = useTemplateRef<HTMLDialogElement>('dialog')
+const visible = ref(false)
 const jobs = ref<VoiceJob[]>([])
 /** How many jobs match the chosen state altogether, which is what the paging is measured against. */
 const total = ref(0)
@@ -51,6 +51,26 @@ const fetching = ref<string | null>(null)
 let timer: number | undefined
 let pending: AbortController | null = null
 
+/** The filter's choices: every state, and an empty value for all of them. */
+const filterOptions = computed(() => [
+  { label: t('voiceJobsFilterAll'), value: '' },
+  ...states.map((state) => ({ label: statusText(state), value: state })),
+])
+
+/** One colour per state, so a queue that is not moving is seen before it is read. */
+function severity(job: VoiceJob): string {
+  switch (status(job)) {
+    case 'QUEUED':
+      return 'warn'
+    case 'RUNNING':
+      return 'info'
+    case 'FAILED':
+      return 'danger'
+    default:
+      return 'secondary'
+  }
+}
+
 const refreshedText = computed(() =>
   refreshedAt.value ? t('voiceJobsRefreshed', { time: refreshedAt.value.toLocaleTimeString(locale.value) }) : '',
 )
@@ -59,7 +79,11 @@ const refreshedText = computed(() =>
 const rangeText = computed(() =>
   total.value === 0
     ? ''
-    : t('voiceJobsRange', { from: offset.value + 1, to: Math.min(offset.value + jobs.value.length, total.value), total: total.value }),
+    : t('voiceJobsRange', {
+        from: offset.value + 1,
+        to: Math.min(offset.value + jobs.value.length, total.value),
+        total: total.value,
+      }),
 )
 
 const hasPrevious = computed(() => offset.value > 0)
@@ -70,7 +94,7 @@ onUnmounted(() => stop())
 async function open(): Promise<void> {
   error.value = null
   offset.value = 0
-  dialog.value?.showModal()
+  visible.value = true
   await refresh()
   schedule()
 }
@@ -91,7 +115,7 @@ async function turn(by: number): Promise<void> {
 
 function close(): void {
   stop()
-  dialog.value?.close()
+  visible.value = false
 }
 
 function schedule(): void {
@@ -101,7 +125,7 @@ function schedule(): void {
   }
 
   timer = window.setTimeout(async () => {
-    if (dialog.value?.open) {
+    if (visible.value) {
       await refresh()
       schedule()
     }
@@ -254,8 +278,8 @@ function fail(caught: unknown): void {
     caught instanceof ApiError && caught.status === 0
       ? t('networkError')
       : caught instanceof ApiError && (caught.status === 429 || caught.status === 503)
-        // A rate limit or a full queue: the same request is worth repeating later, unlike a refused recording.
-        ? t('voiceRetryLater', { message: caught.message })
+        ? // A rate limit or a full queue: the same request is worth repeating later, unlike a refused recording.
+          t('voiceRetryLater', { message: caught.message })
         : t('voiceJobsError', { message: caught instanceof Error ? caught.message : String(caught) })
 }
 
@@ -263,267 +287,126 @@ defineExpose({ open })
 </script>
 
 <template>
-  <dialog ref="dialog" class="voice-jobs" @cancel.prevent="close">
-    <div class="head">
-      <h3>{{ t('voiceJobsTitle') }}</h3>
-      <div v-if="!unsupported" class="refresh">
-        <label class="filter">
-          <span class="sr-only">{{ t('voiceJobsFilter') }}</span>
-          <select v-model="filter" @change="narrow">
-            <option value="">{{ t('voiceJobsFilterAll') }}</option>
-            <option v-for="state in states" :key="state" :value="state">{{ statusText(state) }}</option>
-          </select>
-        </label>
-        <span class="muted">{{ loading ? t('voiceJobsLoading') : refreshedText }}</span>
-        <button type="button" class="button secondary small" :disabled="loading" @click="refresh">{{ t('voiceJobsRefresh') }}</button>
+  <Dialog v-model:visible="visible" modal :style="{ width: 'min(44rem, calc(100vw - 2rem))' }" @hide="stop">
+    <template #header>
+      <div class="flex flex-1 flex-wrap items-center justify-between gap-x-4 gap-y-2 pr-2">
+        <span class="text-lg font-semibold">{{ t('voiceJobsTitle') }}</span>
+        <div v-if="!unsupported" class="flex flex-wrap items-center gap-2 text-xs">
+          <Select
+            v-model="filter"
+            size="small"
+            :options="filterOptions"
+            option-label="label"
+            option-value="value"
+            :aria-label="t('voiceJobsFilter')"
+            @change="narrow"
+          />
+          <span class="muted">{{ loading ? t('voiceJobsLoading') : refreshedText }}</span>
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            :label="t('voiceJobsRefresh')"
+            :disabled="loading"
+            @click="refresh"
+          />
+        </div>
       </div>
-    </div>
-    <p class="intro">{{ t('voiceJobsIntro') }}</p>
+    </template>
 
-    <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
-    <p v-if="unsupported" class="hint muted">{{ t('voiceJobsUnsupported') }}</p>
+    <p class="muted mt-0 mb-4 text-sm">{{ t('voiceJobsIntro') }}</p>
 
-    <table v-if="jobs.length > 0">
+    <p v-if="error" class="hint danger mt-0 mb-3" role="alert">{{ error }}</p>
+    <p v-if="unsupported" class="hint muted mt-0 mb-3">{{ t('voiceJobsUnsupported') }}</p>
+
+    <table v-if="jobs.length > 0" class="mb-4 w-full border-collapse text-sm">
       <thead>
-        <tr>
-          <th>{{ t('voiceJobsJob') }}</th>
-          <th>{{ t('voiceJobsVoice') }}</th>
-          <th>{{ t('voiceJobsStatus') }}</th>
-          <th>{{ t('voiceJobsCreated') }}</th>
-          <th>{{ t('voiceJobsFinished') }}</th>
-          <th><span class="sr-only">{{ t('voiceJobsActions') }}</span></th>
+        <!-- Narrow screens do without the voice and the two timestamps; the status and the button matter there. -->
+        <tr class="text-left text-[0.8125rem] text-muted-color">
+          <th class="py-1.5 pr-2 font-medium">{{ t('voiceJobsJob') }}</th>
+          <th class="py-1.5 pr-2 font-medium max-sm:hidden">{{ t('voiceJobsVoice') }}</th>
+          <th class="py-1.5 pr-2 font-medium">{{ t('voiceJobsStatus') }}</th>
+          <th class="py-1.5 pr-2 font-medium max-sm:hidden">{{ t('voiceJobsCreated') }}</th>
+          <th class="py-1.5 pr-2 font-medium max-sm:hidden">{{ t('voiceJobsFinished') }}</th>
+          <th class="py-1.5">
+            <span class="sr-only">{{ t('voiceJobsActions') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="job in jobs" :key="job.id" :class="{ own: job.id === props.ownJob }">
-          <td>
-            <code :title="job.id">{{ shortId(job.id) }}</code>
-            <span v-if="job.id === props.ownJob" class="own-mark">{{ t('voiceJobsOwn') }}</span>
-            <span v-if="job.errorMessage" class="error">{{ job.errorMessage }}</span>
+        <tr
+          v-for="job in jobs"
+          :key="job.id"
+          class="border-t border-surface align-top"
+          :class="{ 'bg-highlight': job.id === props.ownJob }"
+        >
+          <td class="py-1.5 pr-2">
+            <code class="font-mono text-[0.85rem]" :title="job.id">{{ shortId(job.id) }}</code>
+            <span v-if="job.id === props.ownJob" class="block text-xs text-muted-color">{{ t('voiceJobsOwn') }}</span>
+            <span v-if="job.errorMessage" class="block max-w-96 text-xs text-(--danger)">
+              {{ job.errorMessage }}
+            </span>
           </td>
-          <td class="voice">{{ job.voiceLabel ?? job.voiceId ?? '–' }}</td>
-          <td><span class="status" :class="status(job).toLowerCase()">{{ statusText(job.status) }}</span></td>
-          <td class="time">{{ when(job.createdUtc) }}</td>
-          <td class="time">{{ when(job.finishedUtc) }}</td>
-          <td class="actions">
-            <button
+          <td class="py-1.5 pr-2 text-[0.85rem] max-sm:hidden">{{ job.voiceLabel ?? job.voiceId ?? '–' }}</td>
+          <td class="py-1.5 pr-2">
+            <Tag :severity="severity(job)" :value="statusText(job.status)" class="whitespace-nowrap" />
+          </td>
+          <td class="py-1.5 pr-2 whitespace-nowrap max-sm:hidden">{{ when(job.createdUtc) }}</td>
+          <td class="py-1.5 pr-2 whitespace-nowrap max-sm:hidden">{{ when(job.finishedUtc) }}</td>
+          <td class="py-0.5 text-right whitespace-nowrap">
+            <Button
               v-if="canDownload(job)"
-              type="button"
-              class="link"
+              link
+              size="small"
+              :label="fetching === job.id ? t('voiceJobsDownloading') : t('voiceJobsDownload')"
               :disabled="fetching !== null || removing !== null"
               @click="fetchResult(job)"
-            >
-              {{ fetching === job.id ? t('voiceJobsDownloading') : t('voiceJobsDownload') }}
-            </button>
-            <button
+            />
+            <Button
               v-if="action(job)"
-              type="button"
-              class="link"
+              link
+              size="small"
+              severity="danger"
+              :label="action(job) === 'cancel' ? t('voiceJobsCancel') : t('voiceJobsDelete')"
               :disabled="removing !== null || fetching !== null"
               @click="remove(job)"
-            >
-              {{ action(job) === 'cancel' ? t('voiceJobsCancel') : t('voiceJobsDelete') }}
-            </button>
-            <span v-else-if="!canDownload(job)" class="muted cleared">{{ t('voiceJobsCleared') }}</span>
+            />
+            <span v-else-if="!canDownload(job)" class="muted text-xs">{{ t('voiceJobsCleared') }}</span>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-else-if="!error && !unsupported" class="muted empty">
+    <p v-else-if="!error && !unsupported" class="muted mt-0 mb-4 text-sm">
       {{ loading && !refreshedAt ? t('voiceJobsLoading') : t('voiceJobsEmpty') }}
     </p>
 
-    <div class="choices">
-      <div v-if="!unsupported && total > 0" class="paging">
-        <span class="muted">{{ rangeText }}</span>
-        <button type="button" class="button secondary small" :disabled="!hasPrevious || loading" @click="turn(-1)">
-          {{ t('voiceJobsPrevious') }}
-        </button>
-        <button type="button" class="button secondary small" :disabled="!hasNext || loading" @click="turn(1)">
-          {{ t('voiceJobsNext') }}
-        </button>
+    <template #footer>
+      <div class="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div v-if="!unsupported && total > 0" class="flex flex-wrap items-center gap-2 text-xs">
+          <span class="muted">{{ rangeText }}</span>
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            icon="pi pi-chevron-left"
+            :label="t('voiceJobsPrevious')"
+            :disabled="!hasPrevious || loading"
+            @click="turn(-1)"
+          />
+          <Button
+            size="small"
+            severity="secondary"
+            outlined
+            icon="pi pi-chevron-right"
+            icon-pos="right"
+            :label="t('voiceJobsNext')"
+            :disabled="!hasNext || loading"
+            @click="turn(1)"
+          />
+        </div>
+        <span v-else />
+        <Button severity="secondary" outlined :label="t('voiceJobsClose')" @click="close" />
       </div>
-      <button type="button" class="button secondary" @click="close">{{ t('voiceJobsClose') }}</button>
-    </div>
-  </dialog>
+    </template>
+  </Dialog>
 </template>
-
-<style scoped>
-.voice-jobs {
-  width: min(44rem, calc(100vw - 2rem));
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.voice-jobs::backdrop {
-  background: rgb(0 0 0 / 50%);
-}
-
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
-h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.refresh {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.8rem;
-}
-
-.button.small {
-  padding: 0.3rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-.intro {
-  margin: 0.35rem 0 1rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.hint {
-  margin: 0 0 0.75rem;
-}
-
-table {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-}
-
-th {
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  text-align: left;
-}
-
-td {
-  padding: 0.4rem 0.5rem 0.4rem 0;
-  border-top: 1px solid var(--border);
-  vertical-align: top;
-  font-size: 0.9rem;
-}
-
-tr.own td {
-  background: var(--accent-soft);
-}
-
-code {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-}
-
-.voice {
-  font-size: 0.85rem;
-}
-
-.own-mark {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
-.error {
-  display: block;
-  max-width: 24rem;
-  color: var(--danger);
-  font-size: 0.8rem;
-}
-
-/* One colour per state, so a queue that is not moving is seen before it is read. */
-.status {
-  display: inline-block;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  background: var(--surface-sunken);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.status.queued {
-  color: var(--warning-text);
-}
-
-.status.running {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.status.failed {
-  color: var(--danger);
-}
-
-.time {
-  white-space: nowrap;
-}
-
-.actions {
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* A finished job offers both buttons; they need to stay two words, not one. */
-.actions .link + .link {
-  margin-left: 0.6rem;
-}
-
-.cleared {
-  font-size: 0.8rem;
-}
-
-.link:disabled {
-  color: var(--text-muted);
-  cursor: not-allowed;
-  text-decoration: none;
-}
-
-.empty {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-}
-
-.choices {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-}
-
-.paging {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-}
-
-.filter select {
-  padding: 0.25rem 0.4rem;
-  font-size: 0.8rem;
-}
-
-@media (max-width: 40rem) {
-  /* Narrow screens do without the voice and the two timestamps; the status and the button matter there. */
-  .time,
-  .voice,
-  th:nth-child(2),
-  th:nth-child(4),
-  th:nth-child(5) {
-    display: none;
-  }
-}
-</style>

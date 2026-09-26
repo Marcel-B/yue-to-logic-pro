@@ -15,7 +15,7 @@ defineProps<{ voices: ReferenceVoice[] }>()
 /** The collection after any change, fetched anew so that ids and order are the service's. */
 const emit = defineEmits<{ changed: [voices: ReferenceVoice[]] }>()
 
-const dialog = useTemplateRef<HTMLDialogElement>('dialog')
+const visible = ref(false)
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 const label = ref('')
 const file = ref<File | null>(null)
@@ -29,11 +29,11 @@ const error = ref<string | null>(null)
 function open(): void {
   clear()
   error.value = null
-  dialog.value?.showModal()
+  visible.value = true
 }
 
 function close(): void {
-  dialog.value?.close()
+  visible.value = false
 }
 
 function clear(): void {
@@ -114,7 +114,8 @@ function summary(properties: VoiceAudioProperties | null): string {
     return '–'
   }
 
-  const channels = properties.channels === 1 ? 'mono' : properties.channels === 2 ? 'stereo' : `${properties.channels} ch`
+  const channels =
+    properties.channels === 1 ? 'mono' : properties.channels === 2 ? 'stereo' : `${properties.channels} ch`
   return [
     formatDuration(properties.durationSeconds),
     properties.codec,
@@ -134,8 +135,8 @@ function fail(caught: unknown): void {
     caught instanceof ApiError && caught.status === 0
       ? t('networkError')
       : caught instanceof ApiError && (caught.status === 429 || caught.status === 503)
-        // A rate limit or a full queue: the same request is worth repeating later, unlike a refused recording.
-        ? t('voiceRetryLater', { message: caught.message })
+        ? // A rate limit or a full queue: the same request is worth repeating later, unlike a refused recording.
+          t('voiceRetryLater', { message: caught.message })
         : t('voicesError', { message: caught instanceof Error ? caught.message : String(caught) })
 }
 
@@ -143,184 +144,91 @@ defineExpose({ open })
 </script>
 
 <template>
-  <dialog ref="dialog" class="voice-collection" @cancel.prevent="close">
-    <h3>{{ t('voicesTitle') }}</h3>
-    <p class="intro">{{ t('voicesIntro') }}</p>
+  <Dialog
+    v-model:visible="visible"
+    modal
+    :header="t('voicesTitle')"
+    :style="{ width: 'min(42rem, calc(100vw - 2rem))' }"
+  >
+    <p class="muted mt-0 mb-4 text-sm">{{ t('voicesIntro') }}</p>
 
-    <p v-if="error" class="hint danger" role="alert">{{ error }}</p>
+    <p v-if="error" class="hint danger mt-0 mb-3" role="alert">{{ error }}</p>
 
-    <table v-if="voices.length > 0">
+    <table v-if="voices.length > 0" class="mb-4 w-full border-collapse text-sm">
       <thead>
-        <tr>
-          <th>{{ t('voicesVoice') }}</th>
-          <th>{{ t('voicesAudio') }}</th>
-          <th>{{ t('voicesCreated') }}</th>
-          <th><span class="sr-only">{{ t('voicesActions') }}</span></th>
+        <tr class="text-left text-[0.8125rem] text-muted-color">
+          <th class="py-1.5 pr-2 font-medium">{{ t('voicesVoice') }}</th>
+          <th class="py-1.5 pr-2 font-medium">{{ t('voicesAudio') }}</th>
+          <!-- Narrow screens do without the date; the voice and its recording matter there. -->
+          <th class="py-1.5 pr-2 font-medium max-sm:hidden">{{ t('voicesCreated') }}</th>
+          <th class="py-1.5">
+            <span class="sr-only">{{ t('voicesActions') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="entry in voices" :key="entry.id">
-          <td>{{ entry.label }}</td>
-          <td class="audio">
+        <tr v-for="entry in voices" :key="entry.id" class="border-t border-surface align-top">
+          <td class="py-1.5 pr-2">{{ entry.label }}</td>
+          <td class="py-1.5 pr-2 text-xs">
             {{ summary(entry.stored) }}
-            <span v-if="entry.original" class="original">{{ t('voicesOriginal', { summary: summary(entry.original) }) }}</span>
+            <span v-if="entry.original" class="block text-muted-color">
+              {{ t('voicesOriginal', { summary: summary(entry.original) }) }}
+            </span>
           </td>
-          <td class="time">{{ when(entry.createdUtc) }}</td>
-          <td class="actions">
-            <button type="button" class="link" :title="t('voicesDownloadTitle')" :disabled="downloading !== null" @click="save(entry)">
-              {{ downloading === entry.id ? t('voicesDownloading') : t('voicesDownload') }}
-            </button>
-            <button type="button" class="link" :disabled="removing !== null || busy" @click="remove(entry)">
-              {{ t('voicesDelete') }}
-            </button>
+          <td class="py-1.5 pr-2 whitespace-nowrap max-sm:hidden">{{ when(entry.createdUtc) }}</td>
+          <td class="py-0.5 text-right whitespace-nowrap">
+            <Button
+              link
+              size="small"
+              v-tooltip.top="t('voicesDownloadTitle')"
+              :label="downloading === entry.id ? t('voicesDownloading') : t('voicesDownload')"
+              :disabled="downloading !== null"
+              @click="save(entry)"
+            />
+            <Button
+              link
+              size="small"
+              severity="danger"
+              :label="t('voicesDelete')"
+              :disabled="removing !== null || busy"
+              @click="remove(entry)"
+            />
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-else class="muted empty">{{ t('voicesEmpty') }}</p>
+    <p v-else class="muted mt-0 mb-4 text-sm">{{ t('voicesEmpty') }}</p>
 
-    <form class="add" @submit.prevent="add">
-      <label>
-        <span>{{ t('voicesName') }}</span>
-        <input v-model.trim="label" type="text" required spellcheck="false" :disabled="busy" />
-      </label>
-      <label class="file">
-        <span>{{ t('voicesFile') }}</span>
+    <form class="flex flex-wrap items-end gap-3 border-t border-surface pt-4" @submit.prevent="add">
+      <div class="grid gap-1 text-[0.8125rem] text-muted-color">
+        <label for="voice-name">{{ t('voicesName') }}</label>
+        <InputText id="voice-name" v-model.trim="label" required spellcheck="false" :disabled="busy" />
+      </div>
+      <div class="grid min-w-0 flex-[1_1_16rem] gap-1 text-[0.8125rem] text-muted-color">
+        <label for="voice-file">{{ t('voicesFile') }}</label>
+        <!-- A native file input: PrimeVue's FileUpload brings its own upload flow, while this only picks a file. -->
         <input
+          id="voice-file"
           ref="fileInput"
+          class="max-w-full text-xs"
           type="file"
           accept="audio/*,.wav,.mp3,.flac,.m4a,.aac,.ogg,.opus"
           required
           :disabled="busy"
           @change="chosen"
         />
-      </label>
-      <button type="submit" class="button primary small" :disabled="busy || !label || !file">
-        {{ busy ? t('voicesAdding') : t('voicesAdd') }}
-      </button>
+      </div>
+      <Button
+        type="submit"
+        size="small"
+        :label="busy ? t('voicesAdding') : t('voicesAdd')"
+        :loading="busy"
+        :disabled="busy || !label || !file"
+      />
     </form>
 
-    <div class="choices">
-      <button type="button" class="button secondary" @click="close">{{ t('voicesClose') }}</button>
-    </div>
-  </dialog>
+    <template #footer>
+      <Button severity="secondary" outlined :label="t('voicesClose')" @click="close" />
+    </template>
+  </Dialog>
 </template>
-
-<style scoped>
-.voice-collection {
-  width: min(42rem, calc(100vw - 2rem));
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.voice-collection::backdrop {
-  background: rgb(0 0 0 / 50%);
-}
-
-h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.intro {
-  margin: 0.35rem 0 1rem;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.hint {
-  margin: 0 0 0.75rem;
-}
-
-table {
-  width: 100%;
-  margin-bottom: 1rem;
-  border-collapse: collapse;
-}
-
-th {
-  padding: 0.35rem 0.5rem 0.35rem 0;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  text-align: left;
-}
-
-td {
-  padding: 0.4rem 0.5rem 0.4rem 0;
-  border-top: 1px solid var(--border);
-  vertical-align: top;
-  font-size: 0.9rem;
-}
-
-.audio {
-  font-size: 0.8rem;
-}
-
-.original {
-  display: block;
-  color: var(--text-muted);
-}
-
-.time {
-  white-space: nowrap;
-}
-
-.actions {
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* Two buttons per voice; they need to stay two words, not one. */
-.actions .link + .link {
-  margin-left: 0.6rem;
-}
-
-.add {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-
-.add label {
-  display: grid;
-  gap: 0.25rem;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-}
-
-.add .file {
-  flex: 1 1 16rem;
-  min-width: 0;
-}
-
-.add input[type='file'] {
-  max-width: 100%;
-  font-size: 0.8rem;
-}
-
-.empty {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-}
-
-.choices {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 1rem;
-}
-
-@media (max-width: 40rem) {
-  /* Narrow screens do without the date; the voice and its recording matter there. */
-  .time,
-  th:nth-child(3) {
-    display: none;
-  }
-}
-</style>

@@ -50,9 +50,17 @@ interface Palette {
 }
 
 function palette(canvas: HTMLCanvasElement): Palette {
-  const style = getComputedStyle(canvas)
-  const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
-  return {
+  // The variables follow PrimeVue's tokens, which are written as light-dark(...) and color-mix(...); a canvas takes
+  // neither. A probe element lets the browser resolve them to plain rgb() for the current colour scheme.
+  const probe = document.createElement('span')
+  probe.style.display = 'none'
+  canvas.parentElement?.append(probe)
+  const read = (name: string, fallback: string) => {
+    probe.style.color = fallback
+    probe.style.color = `var(${name}, ${fallback})`
+    return getComputedStyle(probe).color || fallback
+  }
+  const colours = {
     text: read('--text', '#16181d'),
     muted: read('--text-muted', '#5d6474'),
     border: read('--border', '#e3e6ee'),
@@ -60,6 +68,8 @@ function palette(canvas: HTMLCanvasElement): Palette {
     sunken: read('--surface-sunken', '#f1f3f8'),
     accent: read('--accent', '#4f46e5'),
   }
+  probe.remove()
+  return colours
 }
 
 /** One hue per track, distinct in both themes; tracks beyond the palette start over. */
@@ -181,13 +191,21 @@ export function draw(canvas: HTMLCanvasElement, options: DrawOptions): void {
     ctx.fillStyle = trackColour(index)
     for (const note of lane.track.notes) {
       const x = toScreen(note.startTicks)
-      const w = Math.max(1.5, xAtTicks(score, note.startTicks + note.durationTicks, pxPerBar) - xAtTicks(score, note.startTicks, pxPerBar))
+      const w = Math.max(
+        1.5,
+        xAtTicks(score, note.startTicks + note.durationTicks, pxPerBar) - xAtTicks(score, note.startTicks, pxPerBar),
+      )
       if (!visible(x, x + w)) {
         continue
       }
       const y = lane.top + LANE_HEIGHT - ((note.noteNumber - lane.low) / span) * LANE_HEIGHT
       ctx.globalAlpha = 0.35 + 0.65 * ((note.velocity ?? 96) / 127)
-      ctx.fillRect(Math.max(GUTTER_WIDTH, x), y - noteHeight / 2, Math.min(w, width - Math.max(GUTTER_WIDTH, x)), noteHeight)
+      ctx.fillRect(
+        Math.max(GUTTER_WIDTH, x),
+        y - noteHeight / 2,
+        Math.min(w, width - Math.max(GUTTER_WIDTH, x)),
+        noteHeight,
+      )
     }
     ctx.globalAlpha = 1
   })
